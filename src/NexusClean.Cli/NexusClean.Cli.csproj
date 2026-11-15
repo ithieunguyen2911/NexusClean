@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>nexusclean</AssemblyName>
+    <RootNamespace>NexusClean.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NexusClean.Application\NexusClean.Application.csproj" />
+    <ProjectReference Include="..\NexusClean.Infrastructure\NexusClean.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\rules\default-signature-rules.json" Link="rules\default-signature-rules.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

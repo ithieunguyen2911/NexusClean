@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <NeutralLanguage>vi-VN</NeutralLanguage>
+    <Authors>NexusClean Contributors</Authors>
+    <Product>NexusClean — Intelligent &amp; Safe Windows Disk Cleanup</Product>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+</Project>

@@ -24,12 +24,12 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 **Purpose**: Initialize the `.NET 8` solution, 4-layer project references, shared compiler rules, and test sandboxes.
 
-- [ ] T001 Create `.NET 8` solution `NexusClean.sln` and shared build props `Directory.Build.props` (`Nullable=enable`, `ImplicitUsings=enable`, `TreatWarningsAsErrors=true` for Domain/Application) at repository root `NexusClean.sln`
-- [ ] T002 [P] Scaffold pure class library `src/NexusClean.Domain/NexusClean.Domain.csproj` (`TargetFramework=net8.0`, zero external `PackageReference` items per Constitution Principle I)
-- [ ] T003 [P] Scaffold application layer `src/NexusClean.Application/NexusClean.Application.csproj` (`TargetFramework=net8.0`, referencing only `NexusClean.Domain` plus `Microsoft.Extensions.DependencyInjection.Abstractions` and `Microsoft.Extensions.Logging.Abstractions`)
-- [ ] T004 [P] Scaffold infrastructure layer `src/NexusClean.Infrastructure/NexusClean.Infrastructure.csproj` (`TargetFramework=net8.0`, referencing `NexusClean.Application` and `NexusClean.Domain`)
-- [ ] T005 [P] Scaffold CLI presentation host `src/NexusClean.Cli/NexusClean.Cli.csproj` (`TargetFramework=net8.0`, referencing `NexusClean.Application` and `NexusClean.Infrastructure`) and WPF desktop host `src/NexusClean.UI/NexusClean.UI.csproj` (`TargetFramework=net8.0-windows`, `UseWPF=true`, `CommunityToolkit.Mvvm`)
-- [ ] T006 [P] Scaffold xUnit test suites `tests/NexusClean.Domain.Tests/NexusClean.Domain.Tests.csproj`, `tests/NexusClean.Application.Tests/NexusClean.Application.Tests.csproj`, and `tests/NexusClean.Infrastructure.Tests/NexusClean.Infrastructure.Tests.csproj` with shared disposable `TempSandboxFixture` in `tests/NexusClean.Infrastructure.Tests/Fixtures/TempSandboxFixture.cs`
+- [X] T001 Create `.NET 8` solution `NexusClean.sln` and shared build props `Directory.Build.props` (`Nullable=enable`, `ImplicitUsings=enable`, `TreatWarningsAsErrors=true` for Domain/Application) at repository root `NexusClean.sln`
+- [X] T002 [P] Scaffold pure class library `src/NexusClean.Domain/NexusClean.Domain.csproj` (`TargetFramework=net8.0`, zero external `PackageReference` items per Constitution Principle I)
+- [X] T003 [P] Scaffold application layer `src/NexusClean.Application/NexusClean.Application.csproj` (`TargetFramework=net8.0`, referencing only `NexusClean.Domain` plus `Microsoft.Extensions.DependencyInjection.Abstractions` and `Microsoft.Extensions.Logging.Abstractions`)
+- [X] T004 [P] Scaffold infrastructure layer `src/NexusClean.Infrastructure/NexusClean.Infrastructure.csproj` (`TargetFramework=net8.0`, referencing `NexusClean.Application` and `NexusClean.Domain`)
+- [X] T005 [P] Scaffold CLI presentation host `src/NexusClean.Cli/NexusClean.Cli.csproj` (`TargetFramework=net8.0`, referencing `NexusClean.Application` and `NexusClean.Infrastructure`) and WPF desktop host `src/NexusClean.UI/NexusClean.UI.csproj` (`TargetFramework=net8.0-windows`, `UseWPF=true`, `CommunityToolkit.Mvvm`)
+- [X] T006 [P] Scaffold xUnit test suites `tests/NexusClean.Domain.Tests/NexusClean.Domain.Tests.csproj`, `tests/NexusClean.Application.Tests/NexusClean.Application.Tests.csproj`, and `tests/NexusClean.Infrastructure.Tests/NexusClean.Infrastructure.Tests.csproj` with shared disposable `TempSandboxFixture` in `tests/NexusClean.Infrastructure.Tests/Fixtures/TempSandboxFixture.cs`
 
 ---
 
@@ -39,15 +39,15 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 **⚠️ CRITICAL**: Complete Phase 2 before starting User Story phases.
 
-- [ ] T007 [P] Implement Domain enums `ImpactLevel` (`SAFE_CACHE_TIER1`..`PROTECTED_NEVER_DELETE`), `CleanupActionType` (all 8 canonical actions: `DeleteContents`, `DeleteUnlockedItems`, `SelectiveSubfolderPurge`, `SemVerDuplicatePrune`, `RecommendRelocateToSecondaryDrive`, `RelocateOrUnregisterAdmin`, `ResizeShadowStorageAdmin`, `BlockedNoOp`), and `GuardSeverity` (`Allow`, `Warn`, `RequireElevation`, `Block`) in `src/NexusClean.Domain/Enums/`
-- [ ] T008 [P] Implement Domain value objects and entities `ImpactAssessment` (`0 <= RiskScore <= 10`, `RiskScore == 10` when `Level == PROTECTED_NEVER_DELETE`, `SummaryVi` min 10 chars, non-empty `SideEffectIfDeleted`, `PreservedAssets`), `GuardVerdict`, `RelocationPlan` (`RequiredBytesWithBuffer = ceil(SourceSizeInBytes * 1.20)`), and `StorageFinding` (16-char SHA-256 `Id`, canonicalized `TargetPath`, `SubPathsToClean` prefixed by `TargetPath + "\"`, `SizeInBytes >= 0`) in `src/NexusClean.Domain/Entities/`
-- [ ] T009 [P] Define pure Domain interfaces `IDetectionRule`, `ISafetyGuard`, `ICleanupStrategy`, `IDirectorySizer`, `IProcessLockInspector`, `IScanContext`, `ISystemSnapshot`, and `IDiskGrowthWatcher` in `src/NexusClean.Domain/Interfaces/`
-- [ ] T010 Implement `RootSystemFolderGuard` (hardcoded immutable blocklist for `%LOCALAPPDATA%`, `%APPDATA%`, `%USERPROFILE%`, `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`, and drive roots `^[A-Za-z]:\\?$`) and `BrowserProfilePreservationGuard` (hardcoded immutable blocklist for `Login Data`, `Login Data For Account`, `Cookies`, `Bookmarks`, `Preferences`, `Secure Preferences`, `Web Data`, `History`, `Extension Cookies`, `Extensions` across Chrome/Edge/Brave/Cốc Cốc) in `src/NexusClean.Domain/Guards/`
-- [ ] T011 [P] Implement `RunningProcessLockGuard` and `AdminElevationGuard` completing the 4-link `ISafetyGuard` Chain of Responsibility in `src/NexusClean.Domain/Guards/`
-- [ ] T012 [P] Write exhaustive xUnit guard & invariant tests proving fail-closed `PROTECTED_NEVER_DELETE` (`RiskScore = 10`, `BlockedNoOp`) behavior for root paths, path traversal, and browser credential files in `tests/NexusClean.Domain.Tests/Guards/SafetyGuardChainTests.cs` (`SC-002`, `SC-003`)
-- [ ] T013 [P] Implement Application DTOs `SignatureCatalogDocument`, `SignatureRuleDefinition` (`ruleId` pattern `^[a-z0-9_]+(\.[a-z0-9_]+){1,4}$`, `displayName` max 160 chars, `category` max 64 chars), `DriveAnalysisReport`, `CleanupBatchReport`, and `DiskGrowthAlert` in `src/NexusClean.Application/Models/`
-- [ ] T014 Implement `JsonSignatureRuleProvider` validating `docs/03-SEED-SIGNATURE-RULES.json` and `rules/default-signature-rules.json` against `specs/001-intelligent-disk-cleanup/contracts/signature-rules.v1.schema.json` constraints in `src/NexusClean.Infrastructure/Persistence/JsonSignatureRuleProvider.cs` (`FR-015`)
-- [ ] T015 [P] Implement bounded rolling audit logger `JsonlAuditLogRepository` (`%LOCALAPPDATA%\NexusClean\logs\audit.jsonl`, 5 MB max per file, max 3 archives, self-excluded from scan) in `src/NexusClean.Infrastructure/Persistence/JsonlAuditLogRepository.cs` (`FR-016`)
+- [X] T007 [P] Implement Domain enums `ImpactLevel` (`SAFE_CACHE_TIER1`..`PROTECTED_NEVER_DELETE`), `CleanupActionType` (all 8 canonical actions: `DeleteContents`, `DeleteUnlockedItems`, `SelectiveSubfolderPurge`, `SemVerDuplicatePrune`, `RecommendRelocateToSecondaryDrive`, `RelocateOrUnregisterAdmin`, `ResizeShadowStorageAdmin`, `BlockedNoOp`), and `GuardSeverity` (`Allow`, `Warn`, `RequireElevation`, `Block`) in `src/NexusClean.Domain/Enums/`
+- [X] T008 [P] Implement Domain value objects and entities `ImpactAssessment` (`0 <= RiskScore <= 10`, `RiskScore == 10` when `Level == PROTECTED_NEVER_DELETE`, `SummaryVi` min 10 chars, non-empty `SideEffectIfDeleted`, `PreservedAssets`), `GuardVerdict`, `RelocationPlan` (`RequiredBytesWithBuffer = ceil(SourceSizeInBytes * 1.20)`), and `StorageFinding` (16-char SHA-256 `Id`, canonicalized `TargetPath`, `SubPathsToClean` prefixed by `TargetPath + "\"`, `SizeInBytes >= 0`) in `src/NexusClean.Domain/Entities/`
+- [X] T009 [P] Define pure Domain interfaces `IDetectionRule`, `ISafetyGuard`, `ICleanupStrategy`, `IDirectorySizer`, `IProcessLockInspector`, `IScanContext`, `ISystemSnapshot`, and `IDiskGrowthWatcher` in `src/NexusClean.Domain/Interfaces/`
+- [X] T010 Implement `RootSystemFolderGuard` (hardcoded immutable blocklist for `%LOCALAPPDATA%`, `%APPDATA%`, `%USERPROFILE%`, `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`, and drive roots `^[A-Za-z]:\\?$`) and `BrowserProfilePreservationGuard` (hardcoded immutable blocklist for `Login Data`, `Login Data For Account`, `Cookies`, `Bookmarks`, `Preferences`, `Secure Preferences`, `Web Data`, `History`, `Extension Cookies`, `Extensions` across Chrome/Edge/Brave/Cốc Cốc) in `src/NexusClean.Domain/Guards/`
+- [X] T011 [P] Implement `RunningProcessLockGuard` and `AdminElevationGuard` completing the 4-link `ISafetyGuard` Chain of Responsibility in `src/NexusClean.Domain/Guards/`
+- [X] T012 [P] Write exhaustive xUnit guard & invariant tests proving fail-closed `PROTECTED_NEVER_DELETE` (`RiskScore = 10`, `BlockedNoOp`) behavior for root paths, path traversal, and browser credential files in `tests/NexusClean.Domain.Tests/Guards/SafetyGuardChainTests.cs` (`SC-002`, `SC-003`)
+- [X] T013 [P] Implement Application DTOs `SignatureCatalogDocument`, `SignatureRuleDefinition` (`ruleId` pattern `^[a-z0-9_]+(\.[a-z0-9_]+){1,4}$`, `displayName` max 160 chars, `category` max 64 chars), `DriveAnalysisReport`, `CleanupBatchReport`, and `DiskGrowthAlert` in `src/NexusClean.Application/Models/`
+- [X] T014 Implement `JsonSignatureRuleProvider` validating `docs/03-SEED-SIGNATURE-RULES.json` and `rules/default-signature-rules.json` against `specs/001-intelligent-disk-cleanup/contracts/signature-rules.v1.schema.json` constraints in `src/NexusClean.Infrastructure/Persistence/JsonSignatureRuleProvider.cs` (`FR-015`)
+- [X] T015 [P] Implement bounded rolling audit logger `JsonlAuditLogRepository` (`%LOCALAPPDATA%\NexusClean\logs\audit.jsonl`, 5 MB max per file, max 3 archives, self-excluded from scan) in `src/NexusClean.Infrastructure/Persistence/JsonlAuditLogRepository.cs` (`FR-016`)
 
 **Checkpoint**: Domain purity, 4-guard safety chain, JSON rule loader, and bounded JSONL audit trail verified by unit tests.
 
@@ -61,17 +61,17 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 ### Sandbox Tests for User Story 1
 
-- [ ] T016 [P] [US1] Write sandboxed tests for `MultiThreadedDirectorySizer` verifying skipping of NTFS junctions/reparse loops, skipping of cloud-only `Offline`/`RecallOnDataAccess` attributes, and `< 2s` `CancellationToken` responsiveness in `tests/NexusClean.Infrastructure.Tests/FileSystem/MultiThreadedDirectorySizerTests.cs`
-- [ ] T017 [P] [US1] Write unit tests for `AnalyzeDriveUseCase`, `EvaluateImpactUseCase`, and `DiskAnalysisOrchestrator` verifying 5-tier aggregation (`SafeReclaimableBytes`, `RelocatableBytes`, `AdminReclaimableBytes`) in `tests/NexusClean.Application.Tests/UseCases/AnalyzeDriveUseCaseTests.cs`
+- [X] T016 [P] [US1] Write sandboxed tests for `MultiThreadedDirectorySizer` verifying skipping of NTFS junctions/reparse loops, skipping of cloud-only `Offline`/`RecallOnDataAccess` attributes, and `< 2s` `CancellationToken` responsiveness in `tests/NexusClean.Infrastructure.Tests/FileSystem/MultiThreadedDirectorySizerTests.cs`
+- [X] T017 [P] [US1] Write unit tests for `AnalyzeDriveUseCase`, `EvaluateImpactUseCase`, and `DiskAnalysisOrchestrator` verifying 5-tier aggregation (`SafeReclaimableBytes`, `RelocatableBytes`, `AdminReclaimableBytes`) in `tests/NexusClean.Application.Tests/UseCases/AnalyzeDriveUseCaseTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] Author expanded signature catalog `rules/default-signature-rules.json` preserving all 9 rules from `docs/03-SEED-SIGNATURE-RULES.json` and adding Brave, Cốc Cốc, `Notion\Partitions`, `.codex`/`.gemini` logs/tmp, `.cache`, and `pagefile.sys`/`hiberfil.sys` diagnostics (`FR-014`)
-- [ ] T019 [P] [US1] Implement `MultiThreadedDirectorySizer` using `FileSystemEnumerable<long>` (`AttributesToSkip = ReparsePoint | Offline` + cloud recall filter + bounded `Parallel.ForEachAsync`) in `src/NexusClean.Infrastructure/FileSystem/MultiThreadedDirectorySizer.cs` (`FR-001`, `FR-002`)
-- [ ] T020 [P] [US1] Implement `JsonSignatureDetectionRule`, `BrowserSelectiveCacheRule` (`^(Default|Profile \d+)$` + custom profile discovery restricted to `allowedCacheSubfolders`), and `DuplicateVersionExtensionRule` (parsing `.vscode\extensions\extensions.json` + platform-qualified SemVer + stale `.uuid` temp folders) in `src/NexusClean.Application/Rules/` (`FR-007`, `FR-008`)
-- [ ] T021 [US1] Implement `EvaluateImpactUseCase`, `AnalyzeDriveUseCase`, and `DiskAnalysisOrchestrator.AnalyzeAsync` streaming `IProgress<ScanProgress>` in `src/NexusClean.Application/UseCases/` and `src/NexusClean.Application/Orchestration/DiskAnalysisOrchestrator.cs` (`FR-002`, `FR-003`, `FR-004`)
-- [ ] T022 [P] [US1] Implement `nexusclean scan` CLI command (supporting `--drive`, `--rules`, `--json` output, and `Ctrl+C` cancellation) in `src/NexusClean.Cli/Commands/ScanCommand.cs` (`FR-017`)
-- [ ] T023 [US1] Implement WPF Main Dashboard scan view, 4 summary capacity cards, categorized findings grid, and Vietnamese **Impact Inspector Drawer** (`MainDashboardViewModel.cs`, `ImpactInspectorViewModel.cs`, `MainWindow.xaml`) in `src/NexusClean.UI/` (`FR-004`, `FR-017`, `SC-007`)
+- [X] T018 [P] [US1] Author expanded signature catalog `rules/default-signature-rules.json` preserving all 9 rules from `docs/03-SEED-SIGNATURE-RULES.json` and adding Brave, Cốc Cốc, `Notion\Partitions`, `.codex`/`.gemini` logs/tmp, `.cache`, and `pagefile.sys`/`hiberfil.sys` diagnostics (`FR-014`)
+- [X] T019 [P] [US1] Implement `MultiThreadedDirectorySizer` using `FileSystemEnumerable<long>` (`AttributesToSkip = ReparsePoint | Offline` + cloud recall filter + bounded `Parallel.ForEachAsync`) in `src/NexusClean.Infrastructure/FileSystem/MultiThreadedDirectorySizer.cs` (`FR-001`, `FR-002`)
+- [X] T020 [P] [US1] Implement `JsonSignatureDetectionRule`, `BrowserSelectiveCacheRule` (`^(Default|Profile \d+)$` + custom profile discovery restricted to `allowedCacheSubfolders`), and `DuplicateVersionExtensionRule` (parsing `.vscode\extensions\extensions.json` + platform-qualified SemVer + stale `.uuid` temp folders) in `src/NexusClean.Application/Rules/` (`FR-007`, `FR-008`)
+- [X] T021 [US1] Implement `EvaluateImpactUseCase`, `AnalyzeDriveUseCase`, and `DiskAnalysisOrchestrator.AnalyzeAsync` streaming `IProgress<ScanProgress>` in `src/NexusClean.Application/UseCases/` and `src/NexusClean.Application/Orchestration/DiskAnalysisOrchestrator.cs` (`FR-002`, `FR-003`, `FR-004`)
+- [X] T022 [P] [US1] Implement `nexusclean scan` CLI command (supporting `--drive`, `--rules`, `--json` output, and `Ctrl+C` cancellation) in `src/NexusClean.Cli/Commands/ScanCommand.cs` (`FR-017`)
+- [X] T023 [US1] Implement WPF Main Dashboard scan view, 4 summary capacity cards, categorized findings grid, and Vietnamese **Impact Inspector Drawer** (`MainDashboardViewModel.cs`, `ImpactInspectorViewModel.cs`, `MainWindow.xaml`) in `src/NexusClean.UI/` (`FR-004`, `FR-017`, `SC-007`)
 
 **Checkpoint**: User Story 1 delivers a complete, fast, read-only Windows hidden-storage auditor with 5-tier Vietnamese Impact Analysis in both CLI and WPF UI.
 
@@ -85,15 +85,15 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 ### Sandbox Tests for User Story 2
 
-- [ ] T024 [P] [US2] Write sandbox integration tests `BrowserProfileAndVscodeSandboxTests` verifying SHA-256 byte-for-byte preservation of all 10 protected browser credential/extension assets and latest VS Code extension versions in `tests/NexusClean.Infrastructure.Tests/Strategies/BrowserProfileAndVscodeSandboxTests.cs` (`SC-002`, `SC-003`, `SC-004`)
+- [X] T024 [P] [US2] Write sandbox integration tests `BrowserProfileAndVscodeSandboxTests` verifying SHA-256 byte-for-byte preservation of all 10 protected browser credential/extension assets and latest VS Code extension versions in `tests/NexusClean.Infrastructure.Tests/Strategies/BrowserProfileAndVscodeSandboxTests.cs` (`SC-002`, `SC-003`, `SC-004`)
 
 ### Implementation for User Story 2
 
-- [ ] T025 [P] [US2] Implement `BlockedNoOpStrategy`, `FullDirectoryDeleteStrategy`, and `DeleteUnlockedItemsStrategy` (permanent file deletion bypassing `$Recycle.Bin`, catching sharing violations cleanly) in `src/NexusClean.Infrastructure/Strategies/`
-- [ ] T026 [P] [US2] Implement `SelectiveSubfolderPurgeStrategy` (double-checking `BrowserProfilePreservationGuard` before deleting each allowlisted cache subfolder) and `SemVerDuplicatePruneStrategy` in `src/NexusClean.Infrastructure/Strategies/` (`FR-006`, `FR-007`, `FR-008`)
-- [ ] T027 [US2] Implement `SimulateCleanupUseCase` (`DryRun = true`, zero disk mutations) and `ExecuteCleanupUseCase` (`DryRun = false`, mandatory guard re-verification + `JsonlAuditLogRepository` recording) in `src/NexusClean.Application/UseCases/` (`FR-009`, `FR-010`, `FR-016`)
-- [ ] T028 [P] [US2] Implement `nexusclean simulate` and `nexusclean clean` CLI commands (`--ids`, `--tier safe`, `--yes`, `--json`) in `src/NexusClean.Cli/Commands/CleanCommand.cs` (`FR-017`)
-- [ ] T029 [US2] Wire two-step **Mô phỏng Dry-Run** → **Thực thi Dọn dẹp An toàn** workflow, tier-aware checkbox disabling (`IsEnabled = false` for `PROTECTED_NEVER_DELETE`, `RELOCATE_TO_SECONDARY_DRIVE`, `REQUIRES_ADMIN_ACTION`), and batch audit summary modal into `src/NexusClean.UI/ViewModels/MainDashboardViewModel.cs` and `src/NexusClean.UI/Views/MainWindow.xaml` (`FR-009`, `FR-010`)
+- [X] T025 [P] [US2] Implement `BlockedNoOpStrategy`, `FullDirectoryDeleteStrategy`, and `DeleteUnlockedItemsStrategy` (permanent file deletion bypassing `$Recycle.Bin`, catching sharing violations cleanly) in `src/NexusClean.Infrastructure/Strategies/`
+- [X] T026 [P] [US2] Implement `SelectiveSubfolderPurgeStrategy` (double-checking `BrowserProfilePreservationGuard` before deleting each allowlisted cache subfolder) and `SemVerDuplicatePruneStrategy` in `src/NexusClean.Infrastructure/Strategies/` (`FR-006`, `FR-007`, `FR-008`)
+- [X] T027 [US2] Implement `SimulateCleanupUseCase` (`DryRun = true`, zero disk mutations) and `ExecuteCleanupUseCase` (`DryRun = false`, mandatory guard re-verification + `JsonlAuditLogRepository` recording) in `src/NexusClean.Application/UseCases/` (`FR-009`, `FR-010`, `FR-016`)
+- [X] T028 [P] [US2] Implement `nexusclean simulate` and `nexusclean clean` CLI commands (`--ids`, `--tier safe`, `--yes`, `--json`) in `src/NexusClean.Cli/Commands/CleanCommand.cs` (`FR-017`)
+- [X] T029 [US2] Wire two-step **Mô phỏng Dry-Run** → **Thực thi Dọn dẹp An toàn** workflow, tier-aware checkbox disabling (`IsEnabled = false` for `PROTECTED_NEVER_DELETE`, `RELOCATE_TO_SECONDARY_DRIVE`, `REQUIRES_ADMIN_ACTION`), and batch audit summary modal into `src/NexusClean.UI/ViewModels/MainDashboardViewModel.cs` and `src/NexusClean.UI/Views/MainWindow.xaml` (`FR-009`, `FR-010`)
 
 **Checkpoint**: User Stories 1 & 2 complete a production-grade safe Windows cache cleaner with verified Dry-Run, Profile Guards, SemVer Extension Pruning, and Audit Logging.
 
@@ -107,13 +107,13 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 ### Sandbox Tests for User Story 3
 
-- [ ] T030 [P] [US3] Write unit tests for `SecondaryDriveRelocateStrategy` and `PlanSecondaryRelocationUseCase` covering sufficient secondary space (`>= 1.2x`), insufficient space, and single-partition (`C:` only) fallback in `tests/NexusClean.Application.Tests/UseCases/PlanSecondaryRelocationUseCaseTests.cs`
+- [X] T030 [P] [US3] Write unit tests for `SecondaryDriveRelocateStrategy` and `PlanSecondaryRelocationUseCase` covering sufficient secondary space (`>= 1.2x`), insufficient space, and single-partition (`C:` only) fallback in `tests/NexusClean.Application.Tests/UseCases/PlanSecondaryRelocationUseCaseTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T031 [P] [US3] Implement `SecondaryDriveRelocateStrategy` and `IVolumeCapacityProvider` adapter inspecting fixed NTFS volumes (`DriveType.Fixed`, `IsReady`) in `src/NexusClean.Infrastructure/Strategies/SecondaryDriveRelocateStrategy.cs` (`FR-012`)
-- [ ] T032 [US3] Implement `PlanSecondaryRelocationUseCase` generating `RelocationPlan` with Vietnamese step-by-step guides for Zalo PC, WSL2, and Windows Virtual Memory in `src/NexusClean.Application/UseCases/PlanSecondaryRelocationUseCase.cs`
-- [ ] T033 [P] [US3] Implement `nexusclean relocate-plan` CLI command and WPF **Relocation Advisor Dialog** (`RelocationAdvisorViewModel.cs`, `RelocationAdvisorDialog.xaml`) in `src/NexusClean.Cli/Commands/RelocatePlanCommand.cs` and `src/NexusClean.UI/`
+- [X] T031 [P] [US3] Implement `SecondaryDriveRelocateStrategy` and `IVolumeCapacityProvider` adapter inspecting fixed NTFS volumes (`DriveType.Fixed`, `IsReady`) in `src/NexusClean.Infrastructure/Strategies/SecondaryDriveRelocateStrategy.cs` (`FR-012`)
+- [X] T032 [US3] Implement `PlanSecondaryRelocationUseCase` generating `RelocationPlan` with Vietnamese step-by-step guides for Zalo PC, WSL2, and Windows Virtual Memory in `src/NexusClean.Application/UseCases/PlanSecondaryRelocationUseCase.cs`
+- [X] T033 [P] [US3] Implement `nexusclean relocate-plan` CLI command and WPF **Relocation Advisor Dialog** (`RelocationAdvisorViewModel.cs`, `RelocationAdvisorDialog.xaml`) in `src/NexusClean.Cli/Commands/RelocatePlanCommand.cs` and `src/NexusClean.UI/`
 
 **Checkpoint**: Growing user media and system files are safely guided to secondary drives instead of destructively deleted.
 
@@ -127,14 +127,14 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 ### Sandbox Tests for User Story 4
 
-- [ ] T034 [P] [US4] Write sandbox integration tests holding live `FileShare.None` locks to verify `WindowsProcessInspector` Restart Manager attribution and zero-hang skip behavior in `tests/NexusClean.Infrastructure.Tests/OS/WindowsProcessInspectorTests.cs` (`SC-005`)
-- [ ] T035 [P] [US4] Write contract & security validation tests for `AdminMaintenanceRequest` (rejecting `maxShadowSizeGb < 2`, invalid volume letters, or unapproved operations) in `tests/NexusClean.Infrastructure.Tests/OS/ElevatedAdminScriptRunnerTests.cs`
+- [X] T034 [P] [US4] Write sandbox integration tests holding live `FileShare.None` locks to verify `WindowsProcessInspector` Restart Manager attribution and zero-hang skip behavior in `tests/NexusClean.Infrastructure.Tests/OS/WindowsProcessInspectorTests.cs` (`SC-005`)
+- [X] T035 [P] [US4] Write contract & security validation tests for `AdminMaintenanceRequest` (rejecting `maxShadowSizeGb < 2`, invalid volume letters, or unapproved operations) in `tests/NexusClean.Infrastructure.Tests/OS/ElevatedAdminScriptRunnerTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T036 [P] [US4] Implement `WindowsProcessInspector` combining process-name snapshot matching and batched Win32 `rstrtmgr.dll` (`RmStartSession`, `RmRegisterResources`, `RmGetList`, `RmEndSession`) P/Invoke in `src/NexusClean.Infrastructure/OS/WindowsProcessInspector.cs` (`FR-011`)
-- [ ] T037 [P] [US4] Implement `VssShadowStorageManager`, `ElevatedAdminScriptRunner` (`Verb = "runas"`), and `ElevatedAdminScriptStrategy` using strictly parameterized `ProcessStartInfo.ArgumentList` calls in `src/NexusClean.Infrastructure/OS/` and `src/NexusClean.Infrastructure/Strategies/ElevatedAdminScriptStrategy.cs` (`FR-013`)
-- [ ] T038 [US4] Implement `nexusclean admin-exec` CLI worker command and WPF **Elevated Maintenance Queue** panel with command preview and UAC decline handling in `src/NexusClean.Cli/Commands/AdminExecCommand.cs` and `src/NexusClean.UI/`
+- [X] T036 [P] [US4] Implement `WindowsProcessInspector` combining process-name snapshot matching and batched Win32 `rstrtmgr.dll` (`RmStartSession`, `RmRegisterResources`, `RmGetList`, `RmEndSession`) P/Invoke in `src/NexusClean.Infrastructure/OS/WindowsProcessInspector.cs` (`FR-011`)
+- [X] T037 [P] [US4] Implement `VssShadowStorageManager`, `ElevatedAdminScriptRunner` (`Verb = "runas"`), and `ElevatedAdminScriptStrategy` using strictly parameterized `ProcessStartInfo.ArgumentList` calls in `src/NexusClean.Infrastructure/OS/` and `src/NexusClean.Infrastructure/Strategies/ElevatedAdminScriptStrategy.cs` (`FR-013`)
+- [X] T038 [US4] Implement `nexusclean admin-exec` CLI worker command and WPF **Elevated Maintenance Queue** panel with command preview and UAC decline handling in `src/NexusClean.Cli/Commands/AdminExecCommand.cs` and `src/NexusClean.UI/`
 
 **Checkpoint**: Active process locks and system-protected storage (`VSS`, `WSL2`) are handled safely without elevating the main desktop app.
 
@@ -148,14 +148,14 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 ### Sandbox Tests for User Story 5
 
-- [ ] T039 [P] [US5] Write schema & hot-reload tests validating `docs/03-SEED-SIGNATURE-RULES.json`, `rules/default-signature-rules.json`, custom rule injection (`SC-006`), and rejection of malformed/unsafe rules in `tests/NexusClean.Infrastructure.Tests/Persistence/SignatureCatalogValidationTests.cs`
-- [ ] T040 [P] [US5] Write observer tests for `DiskGrowthFileSystemWatcher` verifying threshold alert emission when simulated growth exceeds configured delta in `tests/NexusClean.Infrastructure.Tests/OS/DiskGrowthWatcherTests.cs`
+- [X] T039 [P] [US5] Write schema & hot-reload tests validating `docs/03-SEED-SIGNATURE-RULES.json`, `rules/default-signature-rules.json`, custom rule injection (`SC-006`), and rejection of malformed/unsafe rules in `tests/NexusClean.Infrastructure.Tests/Persistence/SignatureCatalogValidationTests.cs`
+- [X] T040 [P] [US5] Write observer tests for `DiskGrowthFileSystemWatcher` verifying threshold alert emission when simulated growth exceeds configured delta in `tests/NexusClean.Infrastructure.Tests/OS/DiskGrowthWatcherTests.cs`
 
 ### Implementation for User Story 5
 
-- [ ] T041 [P] [US5] Implement `DiskGrowthFileSystemWatcher` (`IDiskGrowthWatcher`) polling drive free space and observing configured high-churn paths (`%TEMP%`, `ZaloData\media`, `*-updater`) with debounced delta calculation in `src/NexusClean.Infrastructure/OS/DiskGrowthFileSystemWatcher.cs` (`FR-018`)
-- [ ] T042 [P] [US5] Implement `nexusclean rules validate` and `nexusclean watch` CLI commands in `src/NexusClean.Cli/Commands/RulesAndWatchCommands.cs` (`FR-015`, `FR-018`)
-- [ ] T043 [US5] Add Rule Catalog reload/validation panel and Tray Growth Alert toggle in `src/NexusClean.UI/ViewModels/MainDashboardViewModel.cs` and `src/NexusClean.UI/Views/MainWindow.xaml`
+- [X] T041 [P] [US5] Implement `DiskGrowthFileSystemWatcher` (`IDiskGrowthWatcher`) polling drive free space and observing configured high-churn paths (`%TEMP%`, `ZaloData\media`, `*-updater`) with debounced delta calculation in `src/NexusClean.Infrastructure/OS/DiskGrowthFileSystemWatcher.cs` (`FR-018`)
+- [X] T042 [P] [US5] Implement `nexusclean rules validate` and `nexusclean watch` CLI commands in `src/NexusClean.Cli/Commands/RulesAndWatchCommands.cs` (`FR-015`, `FR-018`)
+- [X] T043 [US5] Add Rule Catalog reload/validation panel and Tray Growth Alert toggle in `src/NexusClean.UI/ViewModels/MainDashboardViewModel.cs` and `src/NexusClean.UI/Views/MainWindow.xaml`
 
 **Checkpoint**: All 5 User Stories (`P1`–`P3`) are independently functional, extensible, and covered by sandboxed automated tests.
 
@@ -165,9 +165,9 @@ description: "Dependency-ordered, user-story-driven implementation task list for
 
 **Purpose**: Finalize Dependency Injection wiring, low-disk resilience, performance benchmark verification, and `quickstart.md` end-to-end validation.
 
-- [ ] T044 [P] Centralize Clean Architecture Dependency Injection registration extensions (`AddNexusCleanApplication`, `AddNexusCleanInfrastructure`) shared by both `NexusClean.Cli` and `NexusClean.UI` in `src/NexusClean.Infrastructure/DependencyInjection.cs`
-- [ ] T045 [P] Add near-zero free-disk (`< 100 MB` free) resilience test and audit log 5 MB rollover verification in `tests/NexusClean.Infrastructure.Tests/Persistence/JsonlAuditLogRepositoryTests.cs` (`FR-016`)
-- [ ] T046 Execute all 6 end-to-end validation scenarios in `specs/001-intelligent-disk-cleanup/quickstart.md` and verify `< 15s` scan performance target (`SC-001`)
+- [X] T044 [P] Centralize Clean Architecture Dependency Injection registration extensions (`AddNexusCleanApplication`, `AddNexusCleanInfrastructure`) shared by both `NexusClean.Cli` and `NexusClean.UI` in `src/NexusClean.Infrastructure/DependencyInjection.cs`
+- [X] T045 [P] Add near-zero free-disk (`< 100 MB` free) resilience test and audit log 5 MB rollover verification in `tests/NexusClean.Infrastructure.Tests/Persistence/JsonlAuditLogRepositoryTests.cs` (`FR-016`)
+- [X] T046 Execute all 6 end-to-end validation scenarios in `specs/001-intelligent-disk-cleanup/quickstart.md` and verify `< 15s` scan performance target (`SC-001`)
 
 ---
 

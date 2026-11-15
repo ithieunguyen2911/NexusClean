@@ -67,6 +67,65 @@ flowchart LR
 
 ---
 
+## Quick Start — Hướng Dẫn Khởi Động Nhanh
+
+### Yêu cầu môi trường
+- **Hệ điều hành**: Windows 10 / Windows 11 (x64)
+- **Runtime / SDK**: `.NET 8.0 SDK` (hoặc `.NET 9 / .NET 10 SDK` kèm `.NET 8 Desktop Runtime`)
+
+### Cách 1: Khởi động Giao diện Desktop (WPF Dashboard — Khuyên dùng)
+
+Mở **PowerShell** tại thư mục gốc dự án `NexusClean` và chạy:
+
+```powershell
+.\run_ui.ps1
+```
+
+Hoặc chạy trực tiếp bằng lệnh `.NET CLI`:
+
+```powershell
+dotnet run --project src/NexusClean.UI -c Release
+```
+
+**Quy trình sử dụng an toàn trên giao diện Desktop**:
+1. Nhấn **1. Quét Ổ Đĩa** (chỉ đọc 100%, không chạm dữ liệu).
+2. Nhấp vào từng mục để xem **Thanh Thanh Tra Tác Động 5 Cấp Độ** (Mức rủi ro `0–10`, Tác động nếu xóa, Cam kết dữ liệu giữ nguyên, Tiến trình đang giữ khóa).
+3. Nhấn **2. Mô Phỏng Dry-Run** để xem trước chính xác dung lượng thu hồi mà chưa xóa bất kỳ tệp nào.
+4. Nhấn **3. Dọn An Toàn Đã Chọn** (chỉ dọn Tier 1 & Tier 2; giữ nguyên 100% mật khẩu, cookie, dấu trang trình duyệt và extension mới nhất).
+5. Với Zalo / Pagefile / WSL2 / Shadow Copy: dùng nút **Tư Vấn Dời Ổ D:** hoặc **Thực Thi Quyền Admin (UAC)**.
+
+### Cách 2: Sử dụng Công cụ Dòng lệnh (`NexusClean.Cli`)
+
+```powershell
+# 1. Xem hướng dẫn các lệnh CLI
+.\run_cli.ps1 --help
+
+# 2. Quét kiểm toán ổ C: (chỉ đọc 100%, hỗ trợ xuất --json)
+.\run_cli.ps1 scan --drive C:
+
+# 3. Mô phỏng Dry-Run các mục bộ nhớ đệm an toàn (không xóa tệp thật)
+.\run_cli.ps1 simulate --drive C: --tier safe
+
+# 4. Lập kế hoạch di dời dữ liệu phình to (ZaloData, Pagefile) sang ổ phụ D:
+.\run_cli.ps1 relocate-plan --drive C: --target D:
+
+# 5. Kiểm tra tính hợp lệ & an toàn của bộ quy tắc JSON
+.\run_cli.ps1 rules validate
+
+# 6. Thực thi dọn dẹp an toàn Tier 1 + Tier 2 (ghi nhật ký kiểm toán vào %LOCALAPPDATA%\NexusClean\logs\audit.jsonl)
+.\run_cli.ps1 clean --drive C: --tier safe --yes
+```
+
+### Chạy Bộ Kiểm Thử Tự Động Cô Lập (Sandbox xUnit Tests)
+
+Toàn bộ kiểm thử tự động chạy cô lập tuyệt đối bên trong `%TEMP%\NexusClean.Tests\<guid>`:
+
+```powershell
+dotnet test NexusClean.sln -c Release
+```
+
+---
+
 ## Spec-Driven Development Workflow (GitHub Spec Kit)
 
 This repository uses [GitHub Spec Kit](https://github.com/github/spec-kit) (`specify-cli` with Antigravity `agy` skills):
@@ -76,4 +135,4 @@ This repository uses [GitHub Spec Kit](https://github.com/github/spec-kit) (`spe
 3. **Architecture & Plan** (`/speckit-plan`) → [`plan.md`](./specs/001-intelligent-disk-cleanup/plan.md), [`research.md`](./specs/001-intelligent-disk-cleanup/research.md), [`data-model.md`](./specs/001-intelligent-disk-cleanup/data-model.md), [`contracts/`](./specs/001-intelligent-disk-cleanup/contracts/) *(Completed)*
 4. **Task Breakdown** (`/speckit-tasks`) → [`specs/001-intelligent-disk-cleanup/tasks.md`](./specs/001-intelligent-disk-cleanup/tasks.md) (`T001`–`T046`) *(Completed)*
 5. **Consistency Analysis** (`/speckit-analyze`) → Verified 100% requirement coverage & 0 constitution violations *(Completed)*
-6. **Implementation** (`/speckit-implement`) → Ready to execute Phase 1 (`T001`) through Phase 8 (`T046`).
+6. **Implementation** (`/speckit-implement`) → Executed Phase 1 (`T001`) through Phase 8 (`T046`) with 100% passing sandbox tests *(Completed)*.
