@@ -1,0 +1,53 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Windows 11 Fluent Light Palette (Warm, neutral, zero neon) -->
+    <SolidColorBrush x:Key="WindowBgBrush" Color="#F4F5F7" />
+    <SolidColorBrush x:Key="SidebarBgBrush" Color="#ECEEF2" />
+    <SolidColorBrush x:Key="CardBgBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="SubtleSurfaceBrush" Color="#F8F9FB" />
+    <SolidColorBrush x:Key="HoverSurfaceBrush" Color="#EBEEF3" />
+    <SolidColorBrush x:Key="InputBgBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="BorderSubtleBrush" Color="#E2E5EC" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#C7CDD6" />
+    <SolidColorBrush x:Key="GridLineBrush" Color="#EDF0F5" />
+
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#18181B" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#52525B" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#71717A" />
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="#FFFFFF" />
+
+    <!-- Single Windows 11 Brand Accent -->
+    <SolidColorBrush x:Key="AccentPrimaryBrush" Color="#0067C0" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#0056A3" />
+    <SolidColorBrush x:Key="AccentSoftBgBrush" Color="#E6F0FA" />
+    <SolidColorBrush x:Key="SelectionRowBgBrush" Color="#EDF4FC" />
+
+    <!-- Segmented Storage Bar Colors -->
+    <SolidColorBrush x:Key="BarOtherUsedBrush" Color="#64748B" />
+    <SolidColorBrush x:Key="BarSafeBrush" Color="#0067C0" />
+    <SolidColorBrush x:Key="BarRelocateBrush" Color="#D97706" />
+    <SolidColorBrush x:Key="BarAdminBrush" Color="#6366F1" />
+    <SolidColorBrush x:Key="BarFreeTrackBrush" Color="#E5E7EB" />
+
+    <!-- Semantic Soft Pill Badges (No glowing borders) -->
+    <SolidColorBrush x:Key="PillSafeBgBrush" Color="#E6F4EA" />
+    <SolidColorBrush x:Key="PillSafeFgBrush" Color="#137333" />
+
+    <SolidColorBrush x:Key="PillRebuildBgBrush" Color="#E8F0FE" />
+    <SolidColorBrush x:Key="PillRebuildFgBrush" Color="#185ABC" />
+
+    <SolidColorBrush x:Key="PillRelocateBgBrush" Color="#FEF4E2" />
+    <SolidColorBrush x:Key="PillRelocateFgBrush" Color="#A15C00" />
+
+    <SolidColorBrush x:Key="PillAdminBgBrush" Color="#F2ECFD" />
+    <SolidColorBrush x:Key="PillAdminFgBrush" Color="#5B21B6" />
+
+    <SolidColorBrush x:Key="PillProtectedBgBrush" Color="#FCE8E6" />
+    <SolidColorBrush x:Key="PillProtectedFgBrush" Color="#B3261E" />
+
+    <SolidColorBrush x:Key="ModalBackdropBrush" Color="#6618181B" />
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C4C9D4" />
+
+</ResourceDictionary>
