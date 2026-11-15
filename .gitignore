@@ -1,0 +1,38 @@
+# .NET Build & Test Outputs
+bin/
+obj/
+out/
+publish/
+artifacts/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# OS & Temp Files
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.bak
+*.log
+
+# Local Runtime & Sandbox Logs
+logs/
+audit.jsonl*
+.env
+.env.*
+
+# Agent Private Credentials (keep .agents/skills/ tracked for Antigravity Spec Kit!)
+.agents/mcp_config.local.json
+.agents/*.secret*

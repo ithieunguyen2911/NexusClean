@@ -1,0 +1,169 @@
+{
+  "$schema": "https://nexusclean.local/schemas/signature-rules.v1.json",
+  "version": "1.0.0",
+  "updatedAt": "2026-11-15T10:52:00+07:00",
+  "protectedCriticalFileNames": [
+    "Login Data",
+    "Login Data For Account",
+    "Cookies",
+    "Bookmarks",
+    "Preferences",
+    "Secure Preferences",
+    "Web Data",
+    "History",
+    "Extension Cookies"
+  ],
+  "protectedRootPaths": [
+    "%LOCALAPPDATA%",
+    "%APPDATA%",
+    "%USERPROFILE%",
+    "C:\\Windows",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)"
+  ],
+  "rules": [
+    {
+      "ruleId": "system.lenovo.unpacked_drivers",
+      "displayName": "Bộ cài Driver đã giải nén (C:\\Drivers)",
+      "category": "System Installers",
+      "targetPaths": ["C:\\Drivers"],
+      "actionType": "DeleteContents",
+      "impactLevel": "SAFE_CACHE_TIER1",
+      "riskScore": 0,
+      "summaryVi": "Thư mục chứa gói cài đặt driver đã giải nén xong sau khi cài đặt.",
+      "sideEffectIfDeleted": "Không ảnh hưởng đến các driver đã cài trong Windows.",
+      "preservedAssets": ["Driver hệ thống đang hoạt động trong C:\\Windows\\System32\\DriverStore"]
+    },
+    {
+      "ruleId": "system.temp.directories",
+      "displayName": "Thư mục tệp tạm thời (%TEMP% & C:\\Temp)",
+      "category": "System Temp",
+      "targetPaths": ["%LOCALAPPDATA%\\Temp", "C:\\Temp"],
+      "actionType": "DeleteUnlockedItems",
+      "impactLevel": "SAFE_CACHE_TIER1",
+      "riskScore": 1,
+      "summaryVi": "Các tệp nháp và bộ cài tạm thời sinh ra trong quá trình chạy ứng dụng.",
+      "sideEffectIfDeleted": "Không ảnh hưởng ứng dụng; các tệp đang được mở sẽ tự động được bỏ qua an toàn.",
+      "preservedAssets": ["Các phiên làm việc đang mở khóa tệp hiện hành"]
+    },
+    {
+      "ruleId": "browser.chromium.selective_cache",
+      "displayName": "Bộ nhớ đệm tạm Chrome & Edge (Giữ nguyên 100% Profile)",
+      "category": "Web Browsers",
+      "basePaths": [
+        "%LOCALAPPDATA%\\Google\\Chrome\\User Data",
+        "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data"
+      ],
+      "profileFolderRegex": "^(Default|Profile \\d+)$",
+      "allowedCacheSubfolders": [
+        "Cache\\Cache_Data",
+        "Code Cache\\js",
+        "Code Cache\\wasm",
+        "GPUCache",
+        "Service Worker\\CacheStorage"
+      ],
+      "actionType": "SelectiveSubfolderPurge",
+      "impactLevel": "REBUILD_ON_DEMAND",
+      "riskScore": 1,
+      "summaryVi": "Chỉ xóa tệp hình ảnh, script và shader đệm tạm thời bên trong từng Profile.",
+      "sideEffectIfDeleted": "Giữ nguyên tuyệt đối toàn bộ tài khoản, mật khẩu, lịch sử, cookie và dấu trang. Trang web mở lần đầu sẽ tải lại ảnh mới.",
+      "preservedAssets": ["Login Data", "Cookies", "Bookmarks", "Preferences", "History", "Extensions"]
+    },
+    {
+      "ruleId": "ide.vscode.cached_vsix_and_orphans",
+      "displayName": "Gói cài đặt .VSIX cũ & Extension trùng lặp của VS Code",
+      "category": "Developer Tools",
+      "targetPaths": [
+        "%APPDATA%\\Code\\CachedExtensionVSIXs",
+        "%APPDATA%\\Code\\Crashpad\\completed",
+        "%APPDATA%\\Code\\CachedData"
+      ],
+      "extensionRoot": "%USERPROFILE%\\.vscode\\extensions",
+      "pruneOlderDuplicateVersions": true,
+      "pruneDotUuidTempFolders": true,
+      "actionType": "SemVerDuplicatePrune",
+      "impactLevel": "SAFE_CACHE_TIER1",
+      "riskScore": 1,
+      "summaryVi": "Xóa các gói .vsix tải về cũ và các thư mục phiên bản extension cũ bị lưu trùng.",
+      "sideEffectIfDeleted": "Không làm mất cấu hình VS Code và giữ nguyên phiên bản mới nhất của mọi extension.",
+      "preservedAssets": ["settings.json", "keybindings.json", "Phiên bản mới nhất của từng extension"]
+    },
+    {
+      "ruleId": "app.electron.auto_updaters",
+      "displayName": "Bộ cài cập nhật ngầm Electron & Postman cũ",
+      "category": "App Updaters",
+      "targetPaths": [
+        "%LOCALAPPDATA%\\antigravity-updater",
+        "%LOCALAPPDATA%\\kimi-desktop-updater",
+        "%LOCALAPPDATA%\\@mmx-agentelectron-updater",
+        "%LOCALAPPDATA%\\notion-updater",
+        "%LOCALAPPDATA%\\Postman\\packages"
+      ],
+      "actionType": "DeleteContents",
+      "impactLevel": "SAFE_CACHE_TIER1",
+      "riskScore": 0,
+      "summaryVi": "Các tệp cài đặt .exe/.nupkg tải ngầm sau khi ứng dụng tự nâng cấp.",
+      "sideEffectIfDeleted": "Hoàn toàn không ảnh hưởng đến ứng dụng chính đang cài đặt.",
+      "preservedAssets": ["Ứng dụng chính và dữ liệu người dùng"]
+    },
+    {
+      "ruleId": "dev.package_managers.cache",
+      "displayName": "Bộ nhớ đệm trình quản lý gói (uv, pip, npm, pnpm, NuGet, Playwright)",
+      "category": "Developer Caches",
+      "targetPaths": [
+        "%LOCALAPPDATA%\\uv\\cache",
+        "%LOCALAPPDATA%\\pip\\Cache",
+        "%LOCALAPPDATA%\\npm-cache",
+        "%LOCALAPPDATA%\\pnpm\\store",
+        "%LOCALAPPDATA%\\NuGet\\v3-cache",
+        "%LOCALAPPDATA%\\ms-playwright"
+      ],
+      "actionType": "DeleteContents",
+      "impactLevel": "REBUILD_ON_DEMAND",
+      "riskScore": 2,
+      "summaryVi": "Kho lưu đệm các thư viện lập trình và trình duyệt kiểm thử tự động đã tải về.",
+      "sideEffectIfDeleted": "Không ảnh hưởng mã nguồn dự án; khi cài đặt gói mới hoặc chạy test Playwright lần sau, công cụ sẽ tự tải lại phần cần thiết.",
+      "preservedAssets": ["Mã nguồn dự án", "node_modules / .venv đang dùng trong các repo"]
+    },
+    {
+      "ruleId": "chat.zalo.media_storage",
+      "displayName": "Dữ liệu ảnh, video & tệp đính kèm Zalo PC",
+      "category": "Messaging & Sync",
+      "targetPaths": ["%APPDATA%\\ZaloData\\media"],
+      "actionType": "RecommendRelocateToSecondaryDrive",
+      "impactLevel": "RELOCATE_TO_SECONDARY_DRIVE",
+      "riskScore": 5,
+      "summaryVi": "Tự động tải và phình dung lượng hằng ngày từ các hội thoại Zalo.",
+      "sideEffectIfDeleted": "Nếu xóa trực tiếp sẽ mất ảnh/file cũ trên máy và Zalo vẫn tiếp tục tải file mới làm đầy lại ổ C:.",
+      "recommendedAction": "Vào Zalo PC -> Cài đặt -> Quản lý dữ liệu -> Thay đổi vị trí lưu sang D:\\ZaloData.",
+      "preservedAssets": ["Toàn bộ tin nhắn và tệp công việc khi di chuyển sang ổ D:"]
+    },
+    {
+      "ruleId": "vm.wsl.virtual_disk",
+      "displayName": "Đĩa ảo máy ảo Linux WSL2 (ext4.vhdx)",
+      "category": "Virtualization",
+      "targetPaths": ["%LOCALAPPDATA%\\wsl"],
+      "actionType": "RelocateOrUnregisterAdmin",
+      "impactLevel": "REQUIRES_ADMIN_ACTION",
+      "riskScore": 6,
+      "requiresAdmin": true,
+      "lockingProcesses": ["vmmemWSL", "wslservice"],
+      "summaryVi": "Tệp đĩa ảo .vhdx tự phình to và không tự co lại khi xóa file bên trong Linux.",
+      "sideEffectIfDeleted": "Xóa/Unregister sẽ xóa toàn bộ dữ liệu bên trong máy ảo Linux đó; nếu còn dùng, nên di chuyển sang D:\\WSL bằng lệnh wsl --manage <Distro> --move D:\\WSL.",
+      "preservedAssets": ["Hệ điều hành Windows chính"]
+    },
+    {
+      "ruleId": "system.vss.shadow_copies",
+      "displayName": "Bản sao khôi phục hệ thống (System Volume Information)",
+      "category": "Windows System",
+      "targetPaths": ["C:\\System Volume Information"],
+      "actionType": "ResizeShadowStorageAdmin",
+      "impactLevel": "REQUIRES_ADMIN_ACTION",
+      "riskScore": 4,
+      "requiresAdmin": true,
+      "summaryVi": "Các bản chụp System Restore giữ lại khối dữ liệu cũ khi xóa file trên ổ C:.",
+      "sideEffectIfDeleted": "Giới hạn xuống 5 GB (vssadmin resize shadowstorage /for=C: /on=C: /maxsize=5GB) giúp thu hồi dung lượng ngay mà vẫn giữ lại điểm khôi phục gần nhất.",
+      "preservedAssets": ["Điểm khôi phục hệ thống mới nhất"]
+    }
+  ]
+}
