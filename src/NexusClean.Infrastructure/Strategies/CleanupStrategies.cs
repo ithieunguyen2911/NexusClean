@@ -70,11 +70,12 @@ internal static class SafeDeletionEngine
         IReadOnlyList<string> directories,
         bool dryRun,
         bool deleteTargetRootDirWhenEmpty,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<CleanupItemProgress>? itemProgress = null)
     {
         ct.ThrowIfCancellationRequested();
         return Task.Run(
-            () => ProcessDirectoriesContents(finding, directories, dryRun, deleteTargetRootDirWhenEmpty, ct),
+            () => ProcessDirectoriesContents(finding, directories, dryRun, deleteTargetRootDirWhenEmpty, ct, itemProgress),
             ct);
     }
 
@@ -83,7 +84,8 @@ internal static class SafeDeletionEngine
         IReadOnlyList<string> directories,
         bool dryRun,
         bool deleteTargetRootDirWhenEmpty,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<CleanupItemProgress>? itemProgress = null)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -106,6 +108,7 @@ internal static class SafeDeletionEngine
         int filesProcessed = 0;
         var skippedLocked = new List<string>();
         var errors = new List<string>();
+        var progressTracker = itemProgress is null ? null : new ProgressThrottle(itemProgress);
 
         // For unlocked cold package caches (uv, pip, npm, NuGet, Playwright), once the initial sample of files
         // confirms 0 locked handles, skip redundant per-file kernel handle probes in Dry-Run across 100k+ blobs.
@@ -145,8 +148,11 @@ internal static class SafeDeletionEngine
                 ref filesProcessed,
                 skippedLocked,
                 errors,
+                progressTracker,
                 ct);
         }
+
+        progressTracker?.Flush(bytesReclaimed, filesProcessed, skippedLocked.Count);
 
         var status = errors.Count > 0 && filesProcessed == 0
             ? CleanupItemStatus.Failed
@@ -178,6 +184,7 @@ internal static class SafeDeletionEngine
         ref int filesProcessed,
         List<string> skippedLocked,
         List<string> errors,
+        ProgressThrottle? progressTracker,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -277,6 +284,8 @@ internal static class SafeDeletionEngine
             {
                 errors.Add($"{info.FullName}: {ex.Message}");
             }
+
+            progressTracker?.MaybeReport(bytesReclaimed, filesProcessed, skippedLocked.Count);
         }
 
         IEnumerable<DirectoryInfo> subDirs;
@@ -301,6 +310,7 @@ internal static class SafeDeletionEngine
                 ref filesProcessed,
                 skippedLocked,
                 errors,
+                progressTracker,
                 ct);
         }
 
@@ -429,6 +439,30 @@ internal static class SafeDeletionEngine
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteFileW(string lpFileName);
 
+    private sealed class ProgressThrottle(IProgress<CleanupItemProgress> sink)
+    {
+        private long _lastTickMs = Environment.TickCount64;
+        private int _lastReportedFiles;
+
+        public void MaybeReport(long bytes, int files, int skipped)
+        {
+            var now = Environment.TickCount64;
+            if (files - _lastReportedFiles >= 200 || now - _lastTickMs >= 120)
+            {
+                _lastTickMs = now;
+                _lastReportedFiles = files;
+                sink.Report(new CleanupItemProgress(bytes, files, skipped));
+            }
+        }
+
+        public void Flush(long bytes, int files, int skipped)
+        {
+            _lastTickMs = Environment.TickCount64;
+            _lastReportedFiles = files;
+            sink.Report(new CleanupItemProgress(bytes, files, skipped));
+        }
+    }
+
     private sealed class MinimalGuardSnapshot : ISystemSnapshot
     {
         public static readonly MinimalGuardSnapshot Instance = new();
@@ -470,20 +504,34 @@ public sealed class FullDirectoryDeleteStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.DeleteContents;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+        SimulateAsync(finding, itemProgress: null, cancellationToken);
+
+    public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(finding, itemProgress: null, cancellationToken);
+
+    public Task<CleanupItemResult> SimulateAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
         SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: true,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken);
+            cancellationToken,
+            itemProgress);
 
-    public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+    public Task<CleanupItemResult> ExecuteAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
         SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: false,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken);
+            cancellationToken,
+            itemProgress);
 }
 
 public sealed class DeleteUnlockedItemsStrategy : ICleanupStrategy
@@ -491,20 +539,34 @@ public sealed class DeleteUnlockedItemsStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.DeleteUnlockedItems;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+        SimulateAsync(finding, itemProgress: null, cancellationToken);
+
+    public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(finding, itemProgress: null, cancellationToken);
+
+    public Task<CleanupItemResult> SimulateAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
         SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: true,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken);
+            cancellationToken,
+            itemProgress);
 
-    public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+    public Task<CleanupItemResult> ExecuteAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
         SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: false,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken);
+            cancellationToken,
+            itemProgress);
 }
 
 public sealed class SelectiveSubfolderPurgeStrategy : ICleanupStrategy
@@ -512,12 +574,28 @@ public sealed class SelectiveSubfolderPurgeStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.SelectiveSubfolderPurge;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        RunSelectiveAsync(finding, dryRun: true, cancellationToken);
+        SimulateAsync(finding, itemProgress: null, cancellationToken);
 
     public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        RunSelectiveAsync(finding, dryRun: false, cancellationToken);
+        ExecuteAsync(finding, itemProgress: null, cancellationToken);
 
-    private static Task<CleanupItemResult> RunSelectiveAsync(StorageFinding finding, bool dryRun, CancellationToken ct)
+    public Task<CleanupItemResult> SimulateAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
+        RunSelectiveAsync(finding, dryRun: true, itemProgress, cancellationToken);
+
+    public Task<CleanupItemResult> ExecuteAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
+        RunSelectiveAsync(finding, dryRun: false, itemProgress, cancellationToken);
+
+    private static Task<CleanupItemResult> RunSelectiveAsync(
+        StorageFinding finding,
+        bool dryRun,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken ct)
     {
         if (finding.SubPathsToClean.Count == 0 ||
             finding.SubPathsToClean.Any(p => !BrowserProfilePreservationGuard.IsAllowedBrowserCachePath(p)))
@@ -540,7 +618,8 @@ public sealed class SelectiveSubfolderPurgeStrategy : ICleanupStrategy
             finding.SubPathsToClean,
             dryRun,
             deleteTargetRootDirWhenEmpty: false,
-            ct);
+            ct,
+            itemProgress);
     }
 }
 
@@ -549,20 +628,34 @@ public sealed class SemVerDuplicatePruneStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.SemVerDuplicatePrune;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+        SimulateAsync(finding, itemProgress: null, cancellationToken);
+
+    public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(finding, itemProgress: null, cancellationToken);
+
+    public Task<CleanupItemResult> SimulateAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
         SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             finding.SubPathsToClean,
             dryRun: true,
             deleteTargetRootDirWhenEmpty: true,
-            cancellationToken);
+            cancellationToken,
+            itemProgress);
 
-    public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
+    public Task<CleanupItemResult> ExecuteAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
         SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             finding.SubPathsToClean,
             dryRun: false,
             deleteTargetRootDirWhenEmpty: true,
-            cancellationToken);
+            cancellationToken,
+            itemProgress);
 }
 
 public sealed class SecondaryDriveRelocateStrategy : ICleanupStrategy

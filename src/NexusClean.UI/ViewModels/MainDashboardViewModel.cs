@@ -141,9 +141,17 @@ public sealed partial class MainDashboardViewModel : ObservableObject
     [ObservableProperty] private string _emptyStateSubtitle = "Chọn ổ đĩa ở thanh trên và nhấn 'Quét ổ đĩa' để kiểm tra bộ nhớ đệm ẩn (chỉ đọc 100%, không xóa dữ liệu).";
 
     [ObservableProperty] private string _selectedDrive = @"C:\";
-    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotBusy))]
+    private bool _isBusy;
+    public bool IsNotBusy => !IsBusy;
+
     [ObservableProperty] private string _statusBannerText = "Chế độ an toàn: Bảo toàn 100% tài khoản trình duyệt và cấu hình ứng dụng.";
     [ObservableProperty] private double _scanProgressPercent;
+    [ObservableProperty] private bool _isOperationIndeterminate;
+    [ObservableProperty] private string _operationProgressPercentLabel = "0%";
+    [ObservableProperty] private string _activeOperationTitle = string.Empty;
+    [ObservableProperty] private string _activeOperationDetail = string.Empty;
 
     [ObservableProperty] private string _selectedSummaryText = "Chưa chọn mục nào";
     [ObservableProperty] private string _lastDryRunSummary = "Bạn có thể bấm 'Xem trước (Dry-Run)' để kiểm tra số tệp trước khi dọn.";
@@ -435,13 +443,22 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         IsBusy = true;
         Findings.Clear();
         SelectedFinding = null;
-        ScanProgressPercent = 5;
+        ScanProgressPercent = 4;
+        IsOperationIndeterminate = true;
+        OperationProgressPercentLabel = "...";
+        ActiveOperationTitle = $"Đang quét ổ đĩa {SelectedDrive.TrimEnd('\\', '/')}...";
+        ActiveOperationDetail = "Đang kiểm tra bộ quy tắc và không gian ổ đĩa...";
 
         _scanCts = new CancellationTokenSource();
         var progress = new Progress<ScanProgress>(p =>
         {
-            ScanProgressPercent = p.TotalRules > 0 ? Math.Max(8, p.CompletedRules * 100.0 / p.TotalRules) : 0;
-            StatusBannerText = $"Đang phân tích ({p.CompletedRules}/{p.TotalRules}) • Đã ghi nhận {FindingItemViewModel.FormatBytes(p.CumulativeBytesDiscovered)}";
+            IsOperationIndeterminate = false;
+            var pct = p.TotalRules > 0 ? Math.Clamp(p.CompletedRules * 100.0 / p.TotalRules, 4.0, 99.0) : 0;
+            ScanProgressPercent = pct;
+            OperationProgressPercentLabel = $"{pct:F0}%";
+            ActiveOperationTitle = $"Đang phân tích ({p.CompletedRules}/{p.TotalRules})";
+            ActiveOperationDetail = $"{p.CurrentAreaDescription} • Đã ghi nhận {FindingItemViewModel.FormatBytes(p.CumulativeBytesDiscovered)}";
+            StatusBannerText = ActiveOperationDetail;
         });
 
         try
@@ -486,6 +503,8 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         finally
         {
             ScanProgressPercent = 0;
+            IsOperationIndeterminate = false;
+            OperationProgressPercentLabel = "0%";
             _scanCts?.Dispose();
             _scanCts = null;
             IsBusy = false;
@@ -536,14 +555,14 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         }
 
         IsBusy = true;
-        ScanProgressPercent = 6;
+        ScanProgressPercent = 4;
+        IsOperationIndeterminate = true;
+        OperationProgressPercentLabel = "...";
+        ActiveOperationTitle = "Đang chuẩn bị xem trước (Dry-Run)...";
+        ActiveOperationDetail = "Đang kiểm tra trạng thái khóa tệp không phá hủy...";
         _scanCts = new CancellationTokenSource();
 
-        var progress = new Progress<CleanupProgress>(p =>
-        {
-            ScanProgressPercent = p.TotalItems > 0 ? Math.Max(8, p.CompletedItems * 100.0 / p.TotalItems) : 10;
-            StatusBannerText = $"Đang xem trước ({p.CompletedItems}/{p.TotalItems}): {p.CurrentDisplayName} • Đã kiểm tra {FindingItemViewModel.FormatBytes(p.CumulativeBytesProcessed)}";
-        });
+        var progress = new Progress<CleanupProgress>(p => UpdateOperationProgressFromCleanup(p, "Đang xem trước"));
 
         try
         {
@@ -562,6 +581,8 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         finally
         {
             ScanProgressPercent = 0;
+            IsOperationIndeterminate = false;
+            OperationProgressPercentLabel = "0%";
             _scanCts?.Dispose();
             _scanCts = null;
             IsBusy = false;
@@ -603,14 +624,14 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         }
 
         IsBusy = true;
-        ScanProgressPercent = 6;
+        ScanProgressPercent = 4;
+        IsOperationIndeterminate = true;
+        OperationProgressPercentLabel = "...";
+        ActiveOperationTitle = "Đang khởi tạo dọn dẹp an toàn...";
+        ActiveOperationDetail = $"Chuẩn bị xử lý {selected.Length} mục ({formattedEstimate})...";
         _scanCts = new CancellationTokenSource();
 
-        var progress = new Progress<CleanupProgress>(p =>
-        {
-            ScanProgressPercent = p.TotalItems > 0 ? Math.Max(8, p.CompletedItems * 100.0 / p.TotalItems) : 10;
-            StatusBannerText = $"Đang dọn dẹp ({p.CompletedItems}/{p.TotalItems}): {p.CurrentDisplayName} • Đã giải phóng {FindingItemViewModel.FormatBytes(p.CumulativeBytesProcessed)}";
-        });
+        var progress = new Progress<CleanupProgress>(p => UpdateOperationProgressFromCleanup(p, "Đang dọn dẹp"));
 
         var shouldRescan = false;
         try
@@ -638,6 +659,8 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         finally
         {
             ScanProgressPercent = 0;
+            IsOperationIndeterminate = false;
+            OperationProgressPercentLabel = "0%";
             _scanCts?.Dispose();
             _scanCts = null;
             IsBusy = false;
@@ -775,6 +798,40 @@ public sealed partial class MainDashboardViewModel : ObservableObject
             Directory.CreateDirectory(dir);
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true });
         }
+    }
+
+    private void UpdateOperationProgressFromCleanup(CleanupProgress p, string actionVerb)
+    {
+        var currentIndex = Math.Min(p.CompletedItems + 1, Math.Max(1, p.TotalItems));
+        ActiveOperationTitle = $"{actionVerb} ({currentIndex}/{p.TotalItems}): {p.CurrentDisplayName}";
+
+        var hasLiveFiles = p.CumulativeFilesProcessed > 0 || p.CompletedItems > 0;
+        if (hasLiveFiles && p.TotalTargetBytes > 0)
+        {
+            IsOperationIndeterminate = false;
+            var pct = Math.Clamp(p.CumulativeBytesProcessed * 100.0 / p.TotalTargetBytes, 2.0, 99.0);
+            ScanProgressPercent = pct;
+            OperationProgressPercentLabel = $"{pct:F0}%";
+        }
+        else if (hasLiveFiles && p.TotalItems > 0)
+        {
+            IsOperationIndeterminate = false;
+            var pct = Math.Clamp(p.CompletedItems * 100.0 / p.TotalItems, 4.0, 99.0);
+            ScanProgressPercent = pct;
+            OperationProgressPercentLabel = $"{pct:F0}%";
+        }
+        else
+        {
+            IsOperationIndeterminate = true;
+            OperationProgressPercentLabel = "...";
+        }
+
+        var processedText = FindingItemViewModel.FormatBytes(p.CumulativeBytesProcessed);
+        var targetText = p.TotalTargetBytes > 0 ? $" / {FindingItemViewModel.FormatBytes(p.TotalTargetBytes)}" : string.Empty;
+        var skippedText = p.CumulativeSkippedLocked > 0 ? $" • Bỏ qua {p.CumulativeSkippedLocked:N0} tệp đang mở" : string.Empty;
+
+        ActiveOperationDetail = $"{processedText}{targetText} • {p.CumulativeFilesProcessed:N0} tệp{skippedText}";
+        StatusBannerText = $"{actionVerb}: {processedText}{targetText} ({p.CumulativeFilesProcessed:N0} tệp)";
     }
 
     private void UpdateSelectionMetrics()

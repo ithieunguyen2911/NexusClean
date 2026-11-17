@@ -78,7 +78,10 @@ public sealed class HighVolumeAsyncCleanupTests
         Assert.Equal(expectedUnlockedBytes, dryRunReport.TotalBytesReclaimed);
         Assert.Equal(1201, dryRunReport.TotalFilesProcessed);
         Assert.Single(dryRunReport.ItemResults[0].SkippedLockedPaths);
-        Assert.NotEmpty(progressUpdates);
+        // Must emit multiple intra-folder incremental progress updates BEFORE completion (SC-UX-001)
+        Assert.True(progressUpdates.Count >= 4, $"Expected >= 4 intra-folder updates, got {progressUpdates.Count}");
+        Assert.Contains(progressUpdates, p => p.CompletedItems == 0 && p.CumulativeFilesProcessed > 0);
+        Assert.All(progressUpdates, p => Assert.Equal(expectedUnlockedBytes + 1024, p.TotalTargetBytes));
 
         // 2. Execute actual cleanup and verify locked file is skipped while 1,201 unlocked + read-only files are removed
         var execReport = await orchestrator.CleanAsync(new[] { finding }, dryRun: false, progress: progress);

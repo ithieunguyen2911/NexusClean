@@ -23,6 +23,11 @@ public sealed record ScanProgress(
     int TotalRules,
     long CumulativeBytesDiscovered);
 
+public sealed record CleanupItemProgress(
+    long BytesProcessedInItem,
+    int FilesProcessedInItem,
+    int SkippedLockedInItem);
+
 public sealed record CleanupProgress(
     string CurrentRuleId,
     string CurrentDisplayName,
@@ -31,7 +36,8 @@ public sealed record CleanupProgress(
     long CumulativeBytesProcessed,
     int CumulativeFilesProcessed,
     int CumulativeSkippedLocked,
-    bool IsDryRun);
+    bool IsDryRun,
+    long TotalTargetBytes = 0);
 
 public sealed record CleanupItemResult(
     string FindingId,
@@ -113,6 +119,18 @@ public interface ICleanupStrategy
     Task<CleanupItemResult> ExecuteAsync(
         StorageFinding finding,
         CancellationToken cancellationToken = default);
+
+    Task<CleanupItemResult> SimulateAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
+        SimulateAsync(finding, cancellationToken);
+
+    Task<CleanupItemResult> ExecuteAsync(
+        StorageFinding finding,
+        IProgress<CleanupItemProgress>? itemProgress,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(finding, cancellationToken);
 }
 
 public interface IProcessLockInspector

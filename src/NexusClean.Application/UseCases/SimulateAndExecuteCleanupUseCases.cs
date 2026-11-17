@@ -44,6 +44,7 @@ public sealed class SimulateCleanupUseCase
 
             var completed = 0;
             var total = selectedFindings.Count;
+            var totalTargetBytes = selectedFindings.Sum(f => Math.Max(0, f.SizeInBytes));
             long cumBytes = 0;
             var cumFiles = 0;
             var cumSkipped = 0;
@@ -59,7 +60,8 @@ public sealed class SimulateCleanupUseCase
                     cumBytes,
                     cumFiles,
                     cumSkipped,
-                    IsDryRun: true));
+                    IsDryRun: true,
+                    TotalTargetBytes: totalTargetBytes));
 
                 // Re-verify immutable root & browser profile guards before simulating
                 _evaluateImpact.Evaluate(finding, snapshot);
@@ -69,7 +71,21 @@ public sealed class SimulateCleanupUseCase
                     strategy = _strategies[CleanupActionType.BlockedNoOp];
                 }
 
-                var simResult = await strategy.SimulateAsync(finding, cancellationToken).ConfigureAwait(false);
+                IProgress<CleanupItemProgress>? itemProgress = progress is null
+                    ? null
+                    : new DirectProgress<CleanupItemProgress>(item =>
+                        progress.Report(new CleanupProgress(
+                            finding.RuleId,
+                            finding.DisplayName,
+                            completed,
+                            total,
+                            cumBytes + item.BytesProcessedInItem,
+                            cumFiles + item.FilesProcessedInItem,
+                            cumSkipped + item.SkippedLockedInItem,
+                            IsDryRun: true,
+                            TotalTargetBytes: totalTargetBytes)));
+
+                var simResult = await strategy.SimulateAsync(finding, itemProgress, cancellationToken).ConfigureAwait(false);
                 itemResults.Add(simResult);
 
                 completed++;
@@ -85,7 +101,8 @@ public sealed class SimulateCleanupUseCase
                     cumBytes,
                     cumFiles,
                     cumSkipped,
-                    IsDryRun: true));
+                    IsDryRun: true,
+                    TotalTargetBytes: totalTargetBytes));
             }
 
             sw.Stop();
@@ -141,6 +158,7 @@ public sealed class ExecuteCleanupUseCase
 
             var completed = 0;
             var total = selectedFindings.Count;
+            var totalTargetBytes = selectedFindings.Sum(f => Math.Max(0, f.SizeInBytes));
             long cumBytes = 0;
             var cumFiles = 0;
             var cumSkipped = 0;
@@ -156,7 +174,8 @@ public sealed class ExecuteCleanupUseCase
                     cumBytes,
                     cumFiles,
                     cumSkipped,
-                    IsDryRun: false));
+                    IsDryRun: false,
+                    TotalTargetBytes: totalTargetBytes));
 
                 _evaluateImpact.Evaluate(finding, snapshot);
 
@@ -200,7 +219,21 @@ public sealed class ExecuteCleanupUseCase
                     strategy = _strategies[CleanupActionType.BlockedNoOp];
                 }
 
-                var execResult = await strategy.ExecuteAsync(finding, cancellationToken).ConfigureAwait(false);
+                IProgress<CleanupItemProgress>? itemProgress = progress is null
+                    ? null
+                    : new DirectProgress<CleanupItemProgress>(item =>
+                        progress.Report(new CleanupProgress(
+                            finding.RuleId,
+                            finding.DisplayName,
+                            completed,
+                            total,
+                            cumBytes + item.BytesProcessedInItem,
+                            cumFiles + item.FilesProcessedInItem,
+                            cumSkipped + item.SkippedLockedInItem,
+                            IsDryRun: false,
+                            TotalTargetBytes: totalTargetBytes)));
+
+                var execResult = await strategy.ExecuteAsync(finding, itemProgress, cancellationToken).ConfigureAwait(false);
                 itemResults.Add(execResult);
 
                 completed++;
@@ -216,7 +249,8 @@ public sealed class ExecuteCleanupUseCase
                     cumBytes,
                     cumFiles,
                     cumSkipped,
-                    IsDryRun: false));
+                    IsDryRun: false,
+                    TotalTargetBytes: totalTargetBytes));
             }
 
             sw.Stop();
@@ -232,4 +266,9 @@ public sealed class ExecuteCleanupUseCase
             return batch;
         }, cancellationToken);
     }
+}
+
+internal sealed class DirectProgress<T>(Action<T> onReport) : IProgress<T>
+{
+    public void Report(T value) => onReport(value);
 }
