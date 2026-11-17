@@ -7,7 +7,7 @@ using NexusClean.Domain.Interfaces;
 namespace NexusClean.Application.UseCases;
 
 /// <summary>
-/// UseCase #2: Executes non-destructive Dry-Run simulation across selected findings and writes an audit record.
+/// UseCase #2: Executes non-destructive Dry-Run simulation on background worker threads and writes an audit record.
 /// </summary>
 public sealed class SimulateCleanupUseCase
 {
@@ -29,45 +29,82 @@ public sealed class SimulateCleanupUseCase
         _auditLog = auditLog ?? throw new ArgumentNullException(nameof(auditLog));
     }
 
-    public async Task<CleanupBatchReport> ExecuteAsync(
+    public Task<CleanupBatchReport> ExecuteAsync(
         IReadOnlyList<StorageFinding> selectedFindings,
+        IProgress<CleanupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(selectedFindings);
-        var sw = Stopwatch.StartNew();
-        var snapshot = _snapshotProvider.CaptureSnapshot();
-        var itemResults = new List<CleanupItemResult>(selectedFindings.Count);
 
-        foreach (var finding in selectedFindings)
+        return Task.Run(async () =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            _evaluateImpact.Evaluate(finding, snapshot);
+            var sw = Stopwatch.StartNew();
+            var snapshot = _snapshotProvider.CaptureSnapshot();
+            var itemResults = new List<CleanupItemResult>(selectedFindings.Count);
 
-            if (!_strategies.TryGetValue(finding.ActionType, out var strategy))
+            var completed = 0;
+            var total = selectedFindings.Count;
+            long cumBytes = 0;
+            var cumFiles = 0;
+            var cumSkipped = 0;
+
+            foreach (var finding in selectedFindings)
             {
-                strategy = _strategies[CleanupActionType.BlockedNoOp];
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Report(new CleanupProgress(
+                    finding.RuleId,
+                    finding.DisplayName,
+                    completed,
+                    total,
+                    cumBytes,
+                    cumFiles,
+                    cumSkipped,
+                    IsDryRun: true));
+
+                // Re-verify immutable root & browser profile guards before simulating
+                _evaluateImpact.Evaluate(finding, snapshot);
+
+                if (!_strategies.TryGetValue(finding.ActionType, out var strategy))
+                {
+                    strategy = _strategies[CleanupActionType.BlockedNoOp];
+                }
+
+                var simResult = await strategy.SimulateAsync(finding, cancellationToken).ConfigureAwait(false);
+                itemResults.Add(simResult);
+
+                completed++;
+                cumBytes += simResult.BytesReclaimed;
+                cumFiles += simResult.FilesDeletedCount;
+                cumSkipped += simResult.SkippedLockedPaths.Count;
+
+                progress?.Report(new CleanupProgress(
+                    finding.RuleId,
+                    finding.DisplayName,
+                    completed,
+                    total,
+                    cumBytes,
+                    cumFiles,
+                    cumSkipped,
+                    IsDryRun: true));
             }
 
-            var simResult = await strategy.SimulateAsync(finding, cancellationToken).ConfigureAwait(false);
-            itemResults.Add(simResult);
-        }
+            sw.Stop();
+            var batch = new CleanupBatchReport(
+                BatchId: Guid.NewGuid(),
+                IsDryRun: true,
+                IsElevatedBatch: snapshot.IsCurrentProcessElevated,
+                ExecutedAtUtc: DateTime.UtcNow,
+                DurationMs: sw.ElapsedMilliseconds,
+                ItemResults: itemResults);
 
-        sw.Stop();
-        var batch = new CleanupBatchReport(
-            BatchId: Guid.NewGuid(),
-            IsDryRun: true,
-            IsElevatedBatch: snapshot.IsCurrentProcessElevated,
-            ExecutedAtUtc: DateTime.UtcNow,
-            DurationMs: sw.ElapsedMilliseconds,
-            ItemResults: itemResults);
-
-        await _auditLog.AppendBatchReportAsync(batch, cancellationToken).ConfigureAwait(false);
-        return batch;
+            await _auditLog.AppendBatchReportAsync(batch, cancellationToken).ConfigureAwait(false);
+            return batch;
+        }, cancellationToken);
     }
 }
 
 /// <summary>
-/// UseCase #3: Executes guarded user-space cleanup with mandatory pre-flight guard re-evaluation and JSONL audit logging.
+/// UseCase #3: Executes guarded user-space cleanup strictly on background worker threads with pre-flight guard re-evaluation and JSONL audit logging.
 /// </summary>
 public sealed class ExecuteCleanupUseCase
 {
@@ -89,72 +126,110 @@ public sealed class ExecuteCleanupUseCase
         _auditLog = auditLog ?? throw new ArgumentNullException(nameof(auditLog));
     }
 
-    public async Task<CleanupBatchReport> ExecuteAsync(
+    public Task<CleanupBatchReport> ExecuteAsync(
         IReadOnlyList<StorageFinding> selectedFindings,
+        IProgress<CleanupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(selectedFindings);
-        var sw = Stopwatch.StartNew();
-        var snapshot = _snapshotProvider.CaptureSnapshot();
-        var itemResults = new List<CleanupItemResult>(selectedFindings.Count);
 
-        foreach (var finding in selectedFindings)
+        return Task.Run(async () =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            _evaluateImpact.Evaluate(finding, snapshot);
+            var sw = Stopwatch.StartNew();
+            var snapshot = _snapshotProvider.CaptureSnapshot();
+            var itemResults = new List<CleanupItemResult>(selectedFindings.Count);
 
-            if (finding.Impact.Level == ImpactLevel.PROTECTED_NEVER_DELETE ||
-                finding.ActionType == CleanupActionType.BlockedNoOp)
+            var completed = 0;
+            var total = selectedFindings.Count;
+            long cumBytes = 0;
+            var cumFiles = 0;
+            var cumSkipped = 0;
+
+            foreach (var finding in selectedFindings)
             {
-                itemResults.Add(new CleanupItemResult(
-                    finding.Id,
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Report(new CleanupProgress(
                     finding.RuleId,
-                    finding.TargetPath,
-                    CleanupActionType.BlockedNoOp,
-                    CleanupItemStatus.BlockedByGuard,
-                    BytesReclaimed: 0,
-                    FilesDeletedCount: 0,
-                    SkippedLockedPaths: Array.Empty<string>(),
-                    Errors: Array.Empty<string>(),
-                    MessageVi: finding.Impact.SummaryVi));
-                continue;
-            }
+                    finding.DisplayName,
+                    completed,
+                    total,
+                    cumBytes,
+                    cumFiles,
+                    cumSkipped,
+                    IsDryRun: false));
 
-            if (finding.Impact.RequiresAdmin && !snapshot.IsCurrentProcessElevated)
-            {
-                itemResults.Add(new CleanupItemResult(
-                    finding.Id,
+                _evaluateImpact.Evaluate(finding, snapshot);
+
+                if (finding.Impact.Level == ImpactLevel.PROTECTED_NEVER_DELETE ||
+                    finding.ActionType == CleanupActionType.BlockedNoOp)
+                {
+                    itemResults.Add(new CleanupItemResult(
+                        finding.Id,
+                        finding.RuleId,
+                        finding.TargetPath,
+                        CleanupActionType.BlockedNoOp,
+                        CleanupItemStatus.BlockedByGuard,
+                        BytesReclaimed: 0,
+                        FilesDeletedCount: 0,
+                        SkippedLockedPaths: Array.Empty<string>(),
+                        Errors: Array.Empty<string>(),
+                        MessageVi: finding.Impact.SummaryVi));
+                    completed++;
+                    continue;
+                }
+
+                if (finding.Impact.RequiresAdmin && !snapshot.IsCurrentProcessElevated)
+                {
+                    itemResults.Add(new CleanupItemResult(
+                        finding.Id,
+                        finding.RuleId,
+                        finding.TargetPath,
+                        finding.ActionType,
+                        CleanupItemStatus.AdminQueued,
+                        BytesReclaimed: 0,
+                        FilesDeletedCount: 0,
+                        SkippedLockedPaths: Array.Empty<string>(),
+                        Errors: Array.Empty<string>(),
+                        MessageVi: "Mục này cần quyền Quản trị viên (UAC); đã giữ lại cho Hàng đợi Quản trị viên."));
+                    completed++;
+                    continue;
+                }
+
+                if (!_strategies.TryGetValue(finding.ActionType, out var strategy))
+                {
+                    strategy = _strategies[CleanupActionType.BlockedNoOp];
+                }
+
+                var execResult = await strategy.ExecuteAsync(finding, cancellationToken).ConfigureAwait(false);
+                itemResults.Add(execResult);
+
+                completed++;
+                cumBytes += execResult.BytesReclaimed;
+                cumFiles += execResult.FilesDeletedCount;
+                cumSkipped += execResult.SkippedLockedPaths.Count;
+
+                progress?.Report(new CleanupProgress(
                     finding.RuleId,
-                    finding.TargetPath,
-                    finding.ActionType,
-                    CleanupItemStatus.AdminQueued,
-                    BytesReclaimed: 0,
-                    FilesDeletedCount: 0,
-                    SkippedLockedPaths: Array.Empty<string>(),
-                    Errors: Array.Empty<string>(),
-                    MessageVi: "Mục này cần quyền Quản trị viên (UAC); đã giữ lại cho Hàng đợi Quản trị viên."));
-                continue;
+                    finding.DisplayName,
+                    completed,
+                    total,
+                    cumBytes,
+                    cumFiles,
+                    cumSkipped,
+                    IsDryRun: false));
             }
 
-            if (!_strategies.TryGetValue(finding.ActionType, out var strategy))
-            {
-                strategy = _strategies[CleanupActionType.BlockedNoOp];
-            }
+            sw.Stop();
+            var batch = new CleanupBatchReport(
+                BatchId: Guid.NewGuid(),
+                IsDryRun: false,
+                IsElevatedBatch: snapshot.IsCurrentProcessElevated,
+                ExecutedAtUtc: DateTime.UtcNow,
+                DurationMs: sw.ElapsedMilliseconds,
+                ItemResults: itemResults);
 
-            var execResult = await strategy.ExecuteAsync(finding, cancellationToken).ConfigureAwait(false);
-            itemResults.Add(execResult);
-        }
-
-        sw.Stop();
-        var batch = new CleanupBatchReport(
-            BatchId: Guid.NewGuid(),
-            IsDryRun: false,
-            IsElevatedBatch: snapshot.IsCurrentProcessElevated,
-            ExecutedAtUtc: DateTime.UtcNow,
-            DurationMs: sw.ElapsedMilliseconds,
-            ItemResults: itemResults);
-
-        await _auditLog.AppendBatchReportAsync(batch, cancellationToken).ConfigureAwait(false);
-        return batch;
+            await _auditLog.AppendBatchReportAsync(batch, cancellationToken).ConfigureAwait(false);
+            return batch;
+        }, cancellationToken);
     }
 }

@@ -158,7 +158,7 @@ public static class Program
 
         if (!dryRun && !autoConfirm)
         {
-            var simPreview = await orchestrator.CleanAsync(targets, dryRun: true, ct);
+            var simPreview = await orchestrator.CleanAsync(targets, dryRun: true, cancellationToken: ct);
             Console.Error.WriteLine($"[Dry-Run Preview] Sẽ giải phóng dự kiến {FormatSize(simPreview.TotalBytesReclaimed)} ({simPreview.TotalFilesProcessed} tệp).");
             Console.Error.Write("Xác nhận thực thi dọn dẹp thật? (y/N): ");
             var reply = Console.ReadLine()?.Trim();
@@ -170,7 +170,7 @@ public static class Program
             }
         }
 
-        var batchReport = await orchestrator.CleanAsync(targets, dryRun, ct);
+        var batchReport = await orchestrator.CleanAsync(targets, dryRun, cancellationToken: ct);
         var auditRepo = provider.GetRequiredService<IAuditLogRepository>();
 
         if (jsonMode)

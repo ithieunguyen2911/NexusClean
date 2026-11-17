@@ -536,11 +536,24 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         }
 
         IsBusy = true;
+        ScanProgressPercent = 6;
+        _scanCts = new CancellationTokenSource();
+
+        var progress = new Progress<CleanupProgress>(p =>
+        {
+            ScanProgressPercent = p.TotalItems > 0 ? Math.Max(8, p.CompletedItems * 100.0 / p.TotalItems) : 10;
+            StatusBannerText = $"Đang xem trước ({p.CompletedItems}/{p.TotalItems}): {p.CurrentDisplayName} • Đã kiểm tra {FindingItemViewModel.FormatBytes(p.CumulativeBytesProcessed)}";
+        });
+
         try
         {
-            var simReport = await _orchestrator.CleanAsync(selected, dryRun: true);
+            var simReport = await _orchestrator.CleanAsync(selected, dryRun: true, progress: progress, cancellationToken: _scanCts.Token);
             LastDryRunSummary = $"Xem trước Dry-Run: Có thể giải phóng {FindingItemViewModel.FormatBytes(simReport.TotalBytesReclaimed)} ({simReport.TotalFilesProcessed:N0} tệp, tự động bỏ qua {simReport.TotalSkippedLockedCount:N0} tệp đang mở)";
             StatusBannerText = $"Hoàn tất xem trước (chưa xóa tệp nào) • Dự kiến thu hồi {FindingItemViewModel.FormatBytes(simReport.TotalBytesReclaimed)}.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusBannerText = "Đã dừng thao tác xem trước (Dry-Run).";
         }
         catch (Exception ex)
         {
@@ -548,6 +561,9 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         }
         finally
         {
+            ScanProgressPercent = 0;
+            _scanCts?.Dispose();
+            _scanCts = null;
             IsBusy = false;
         }
     }
@@ -563,33 +579,21 @@ public sealed partial class MainDashboardViewModel : ObservableObject
             return;
         }
 
-        IsBusy = true;
-        CleanupBatchReport preview;
-        try
-        {
-            preview = await _orchestrator.CleanAsync(selected, dryRun: true);
-        }
-        catch (Exception ex)
-        {
-            IsBusy = false;
-            StatusBannerText = $"Lỗi kiểm tra trước khi dọn: {ex.Message}";
-            return;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+        // Open the confirmation modal INSTANTLY (< 5 ms) using already-scanned metrics — zero pre-modal disk walk!
+        var estimatedBytes = selected.Sum(x => x.SizeInBytes);
+        var estimatedFiles = selected.Sum(x => x.FileCount);
+        var formattedEstimate = FindingItemViewModel.FormatBytes(estimatedBytes);
 
         var confirmed = await Modal.ShowConfirmAsync(
             title: "Xác nhận dọn dẹp bộ nhớ đệm",
-            primaryMessage: $"NexusClean đã kiểm tra trước {selected.Length} mục bạn chọn và sẵn sàng giải phóng khoảng {FindingItemViewModel.FormatBytes(preview.TotalBytesReclaimed)}.",
+            primaryMessage: $"Bạn đã chọn {selected.Length} mục bộ nhớ đệm an toàn với tổng dung lượng khoảng {formattedEstimate} ({estimatedFiles:N0} tệp).",
             bullets: new[]
             {
-                $"Tổng số tệp bộ nhớ đệm có thể xóa ngay: {preview.TotalFilesProcessed:N0} tệp",
-                $"Tệp đang mở được tự động bỏ qua an toàn: {preview.TotalSkippedLockedCount:N0} tệp",
+                "Chạy bằng quyền người dùng chuẩn (không cần quyền Admin / UAC)",
+                "Các tệp đang được hệ thống hoặc ứng dụng mở sẽ tự động bỏ qua an toàn, không gây treo máy",
                 "Giữ nguyên 100% tài khoản đăng nhập trình duyệt, Cookie, dấu trang và extension mới nhất"
             },
-            confirmText: $"Dọn dẹp {FindingItemViewModel.FormatBytes(preview.TotalBytesReclaimed)}",
+            confirmText: $"Dọn dẹp {formattedEstimate}",
             cancelText: "Để sau");
 
         if (!confirmed)
@@ -599,12 +603,33 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         }
 
         IsBusy = true;
+        ScanProgressPercent = 6;
+        _scanCts = new CancellationTokenSource();
+
+        var progress = new Progress<CleanupProgress>(p =>
+        {
+            ScanProgressPercent = p.TotalItems > 0 ? Math.Max(8, p.CompletedItems * 100.0 / p.TotalItems) : 10;
+            StatusBannerText = $"Đang dọn dẹp ({p.CompletedItems}/{p.TotalItems}): {p.CurrentDisplayName} • Đã giải phóng {FindingItemViewModel.FormatBytes(p.CumulativeBytesProcessed)}";
+        });
+
+        var shouldRescan = false;
         try
         {
-            var execReport = await _orchestrator.CleanAsync(selected, dryRun: false);
+            var execReport = await _orchestrator.CleanAsync(
+                selected,
+                dryRun: false,
+                progress: progress,
+                cancellationToken: _scanCts.Token);
+
             var reclaimedText = FindingItemViewModel.FormatBytes(execReport.TotalBytesReclaimed);
-            LastDryRunSummary = $"Lần dọn gần nhất: Đã giải phóng {reclaimedText} ({execReport.TotalFilesProcessed:N0} tệp)";
-            StatusBannerText = $"Đã giải phóng thành công {reclaimedText} ({execReport.TotalFilesProcessed:N0} tệp). Nhật ký đã được lưu.";
+            LastDryRunSummary = $"Lần dọn gần nhất: Đã giải phóng {reclaimedText} ({execReport.TotalFilesProcessed:N0} tệp, bỏ qua {execReport.TotalSkippedLockedCount:N0} tệp đang mở)";
+            StatusBannerText = $"Đã giải phóng thành công {reclaimedText} ({execReport.TotalFilesProcessed:N0} tệp). Đang cập nhật lại dung lượng ổ đĩa...";
+            shouldRescan = true;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusBannerText = "Đã dừng dọn dẹp theo yêu cầu. Đang cập nhật lại dung lượng hiện tại...";
+            shouldRescan = true;
         }
         catch (Exception ex)
         {
@@ -612,10 +637,16 @@ public sealed partial class MainDashboardViewModel : ObservableObject
         }
         finally
         {
+            ScanProgressPercent = 0;
+            _scanCts?.Dispose();
+            _scanCts = null;
             IsBusy = false;
         }
 
-        await ScanDriveAsync();
+        if (shouldRescan)
+        {
+            await ScanDriveAsync();
+        }
     }
 
     [RelayCommand]

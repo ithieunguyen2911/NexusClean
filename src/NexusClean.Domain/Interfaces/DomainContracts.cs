@@ -23,6 +23,16 @@ public sealed record ScanProgress(
     int TotalRules,
     long CumulativeBytesDiscovered);
 
+public sealed record CleanupProgress(
+    string CurrentRuleId,
+    string CurrentDisplayName,
+    int CompletedItems,
+    int TotalItems,
+    long CumulativeBytesProcessed,
+    int CumulativeFilesProcessed,
+    int CumulativeSkippedLocked,
+    bool IsDryRun);
+
 public sealed record CleanupItemResult(
     string FindingId,
     string RuleId,

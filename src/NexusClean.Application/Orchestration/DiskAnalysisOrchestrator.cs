@@ -53,16 +53,18 @@ public sealed class DiskAnalysisOrchestrator
     public Task<CleanupBatchReport> CleanAsync(
         IReadOnlyList<StorageFinding> selectedFindings,
         bool dryRun,
+        IProgress<CleanupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         return dryRun
-            ? _simulateUseCase.ExecuteAsync(selectedFindings, cancellationToken)
-            : _executeUseCase.ExecuteAsync(selectedFindings, cancellationToken);
+            ? _simulateUseCase.ExecuteAsync(selectedFindings, progress, cancellationToken)
+            : _executeUseCase.ExecuteAsync(selectedFindings, progress, cancellationToken);
     }
 
     public async Task<CleanupBatchReport> CleanByIdsAsync(
         IReadOnlyList<string> findingIds,
         bool dryRun,
+        IProgress<CleanupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_lastReport is null)
@@ -72,7 +74,7 @@ public sealed class DiskAnalysisOrchestrator
 
         var idSet = new HashSet<string>(findingIds, StringComparer.OrdinalIgnoreCase);
         var matched = _lastReport.Findings.Where(f => idSet.Contains(f.Id)).ToArray();
-        return await CleanAsync(matched, dryRun, cancellationToken).ConfigureAwait(false);
+        return await CleanAsync(matched, dryRun, progress, cancellationToken).ConfigureAwait(false);
     }
 
     public RelocationPlan PlanRelocation(StorageFinding finding, string? preferredTargetDrive = null) =>

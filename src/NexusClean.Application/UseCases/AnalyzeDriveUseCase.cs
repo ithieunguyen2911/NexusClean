@@ -39,10 +39,14 @@ public sealed class AnalyzeDriveUseCase
         var startedAtUtc = DateTime.UtcNow;
 
         var normalizedDrive = NormalizeDriveRoot(driveName);
-        var (catalog, rules, _) = _catalogProvider.LoadRules(customRulesPath);
-        var snapshot = _snapshotProvider.CaptureSnapshot(
-            catalog.ProtectedRootPaths,
-            catalog.ProtectedCriticalFileNames);
+        var (catalog, rules, snapshot) = await Task.Run(() =>
+        {
+            var (cat, loadedRules, _) = _catalogProvider.LoadRules(customRulesPath);
+            var snap = _snapshotProvider.CaptureSnapshot(
+                cat.ProtectedRootPaths,
+                cat.ProtectedCriticalFileNames);
+            return (cat, loadedRules, snap);
+        }, cancellationToken).ConfigureAwait(false);
 
         var context = new DefaultScanContext(normalizedDrive, _directorySizer, environmentOverrides);
         var discovered = new List<StorageFinding>();

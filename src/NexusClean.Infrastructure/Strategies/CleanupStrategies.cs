@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using NexusClean.Application.UseCases;
 using NexusClean.Domain.Entities;
 using NexusClean.Domain.Enums;
@@ -9,8 +11,9 @@ namespace NexusClean.Infrastructure.Strategies;
 /// <summary>
 /// Shared defense-in-depth engine used by mutating strategies:
 /// - Re-verifies RootSystemFolderGuard and BrowserProfilePreservationGuard right before touching disk.
-/// - Never follows NTFS ReparsePoints or touches cloud-only RecallOnDataAccess placeholders.
-/// - Permanently deletes cache files (bypassing $Recycle.Bin) while gracefully skipping locked handles.
+/// - Uses single-pass WIN32_FIND_DATA DirectoryInfo enumeration skipping ReparsePoints and cloud placeholders.
+/// - Uses Win32 CreateFileW(DELETE = 0x00010000) in Dry-Run (avoiding FILE_READ_DATA/FILE_WRITE_DATA Windows Defender storms)
+///   and exception-free Win32 DeleteFileW in Execute mode so thousands of locked %TEMP% files never cause CLR exception stalls.
 /// </summary>
 internal static class SafeDeletionEngine
 {
@@ -19,6 +22,24 @@ internal static class SafeDeletionEngine
         FileAttributes.Offline |
         (FileAttributes)0x00040000 |
         (FileAttributes)0x00400000;
+
+    private const uint AccessDeleteOnly = 0x00010000;
+    private const uint ShareReadWriteDelete = 0x00000001 | 0x00000002 | 0x00000004;
+    private const uint OpenExisting = 3;
+
+    private const int ErrorFileNotFound = 2;
+    private const int ErrorPathNotFound = 3;
+    private const int ErrorAccessDenied = 5;
+    private const int ErrorSharingViolation = 32;
+    private const int ErrorLockViolation = 33;
+
+    private static readonly EnumerationOptions NonRecursiveOptions = new()
+    {
+        IgnoreInaccessible = true,
+        RecurseSubdirectories = false,
+        ReturnSpecialDirectories = false,
+        AttributesToSkip = SkipMask
+    };
 
     private static readonly RootSystemFolderGuard RootGuard = new();
     private static readonly BrowserProfilePreservationGuard BrowserGuard = new();
@@ -44,6 +65,19 @@ internal static class SafeDeletionEngine
         return true;
     }
 
+    public static Task<CleanupItemResult> ProcessDirectoriesContentsAsync(
+        StorageFinding finding,
+        IReadOnlyList<string> directories,
+        bool dryRun,
+        bool deleteTargetRootDirWhenEmpty,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.Run(
+            () => ProcessDirectoriesContents(finding, directories, dryRun, deleteTargetRootDirWhenEmpty, ct),
+            ct);
+    }
+
     public static CleanupItemResult ProcessDirectoriesContents(
         StorageFinding finding,
         IReadOnlyList<string> directories,
@@ -51,6 +85,8 @@ internal static class SafeDeletionEngine
         bool deleteTargetRootDirWhenEmpty,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         if (!VerifyDefenseInDepth(finding, out var blockedMsg))
         {
             return new CleanupItemResult(
@@ -71,6 +107,13 @@ internal static class SafeDeletionEngine
         var skippedLocked = new List<string>();
         var errors = new List<string>();
 
+        // For unlocked cold package caches (uv, pip, npm, NuGet, Playwright), once the initial sample of files
+        // confirms 0 locked handles, skip redundant per-file kernel handle probes in Dry-Run across 100k+ blobs.
+        var canFastPathUnlockedColdCacheInDryRun =
+            dryRun &&
+            !finding.Impact.IsLockedByProcess &&
+            string.Equals(finding.Category, "Developer Caches", StringComparison.OrdinalIgnoreCase);
+
         foreach (var dir in directories)
         {
             ct.ThrowIfCancellationRequested();
@@ -79,10 +122,11 @@ internal static class SafeDeletionEngine
                 continue;
             }
 
+            DirectoryInfo rootInfo;
             try
             {
-                var dirAttr = File.GetAttributes(dir);
-                if ((dirAttr & SkipMask) != 0)
+                rootInfo = new DirectoryInfo(dir);
+                if ((rootInfo.Attributes & SkipMask) != 0)
                 {
                     continue;
                 }
@@ -93,9 +137,10 @@ internal static class SafeDeletionEngine
             }
 
             TraverseAndCleanDirectory(
-                dir,
+                rootInfo,
                 dryRun,
                 deleteDirectoryItself: deleteTargetRootDirWhenEmpty,
+                canFastPathUnlockedColdCacheInDryRun,
                 ref bytesReclaimed,
                 ref filesProcessed,
                 skippedLocked,
@@ -125,55 +170,64 @@ internal static class SafeDeletionEngine
     }
 
     private static void TraverseAndCleanDirectory(
-        string currentDir,
+        DirectoryInfo currentDir,
         bool dryRun,
         bool deleteDirectoryItself,
+        bool canFastPathColdCacheInDryRun,
         ref long bytesReclaimed,
         ref int filesProcessed,
         List<string> skippedLocked,
         List<string> errors,
         CancellationToken ct)
     {
-        string[] files;
+        ct.ThrowIfCancellationRequested();
+
+        IEnumerable<FileInfo> files;
         try
         {
-            files = Directory.GetFiles(currentDir);
+            files = currentDir.EnumerateFiles("*", NonRecursiveOptions);
         }
         catch (UnauthorizedAccessException)
         {
-            skippedLocked.Add(currentDir);
+            skippedLocked.Add(currentDir.FullName);
             return;
         }
         catch (Exception ex)
         {
-            errors.Add($"{currentDir}: {ex.Message}");
+            errors.Add($"{currentDir.FullName}: {ex.Message}");
             return;
         }
 
-        foreach (var file in files)
+        foreach (var info in files)
         {
-            ct.ThrowIfCancellationRequested();
-            var leaf = Path.GetFileName(file);
+            if ((filesProcessed & 63) == 0)
+            {
+                ct.ThrowIfCancellationRequested();
+            }
+
+            var leaf = info.Name;
             if (BrowserProfilePreservationGuard.ImmutableProtectedBrowserAssets.Contains(leaf))
             {
-                // Hard safety net: never touch a protected credential filename even if misplaced!
                 continue;
             }
 
             try
             {
-                var info = new FileInfo(file);
-                if ((info.Attributes & SkipMask) != 0)
+                var attr = info.Attributes;
+                if ((attr & SkipMask) != 0)
                 {
                     continue;
                 }
 
                 var fileLen = info.Length;
+                var fullPath = info.FullName;
+
                 if (dryRun)
                 {
-                    if (IsFileCurrentlyLockedForDelete(file))
+                    var skipHandleProbe = canFastPathColdCacheInDryRun && filesProcessed >= 128 && skippedLocked.Count == 0;
+                    if (!skipHandleProbe && IsFileLockedForDeleteFast(fullPath, attr))
                     {
-                        skippedLocked.Add(file);
+                        skippedLocked.Add(fullPath);
                     }
                     else
                     {
@@ -183,34 +237,52 @@ internal static class SafeDeletionEngine
                 }
                 else
                 {
-                    if ((info.Attributes & FileAttributes.ReadOnly) != 0)
+                    if ((attr & FileAttributes.ReadOnly) != 0)
                     {
-                        info.Attributes &= ~FileAttributes.ReadOnly;
+                        try
+                        {
+                            File.SetAttributes(fullPath, attr & ~FileAttributes.ReadOnly);
+                        }
+                        catch
+                        {
+                            skippedLocked.Add(fullPath);
+                            continue;
+                        }
                     }
 
-                    File.Delete(file);
-                    bytesReclaimed += fileLen;
-                    filesProcessed++;
+                    if (TryDeleteFileFast(fullPath, out var isLockedOrDenied, out var win32Err))
+                    {
+                        bytesReclaimed += fileLen;
+                        filesProcessed++;
+                    }
+                    else if (isLockedOrDenied)
+                    {
+                        skippedLocked.Add(fullPath);
+                    }
+                    else if (win32Err != 0)
+                    {
+                        errors.Add($"{fullPath}: Win32 error {win32Err}");
+                    }
                 }
             }
             catch (IOException ex) when (IsSharingOrLockViolation(ex))
             {
-                skippedLocked.Add(file);
+                skippedLocked.Add(info.FullName);
             }
             catch (UnauthorizedAccessException)
             {
-                skippedLocked.Add(file);
+                skippedLocked.Add(info.FullName);
             }
             catch (Exception ex)
             {
-                errors.Add($"{file}: {ex.Message}");
+                errors.Add($"{info.FullName}: {ex.Message}");
             }
         }
 
-        string[] subDirs;
+        IEnumerable<DirectoryInfo> subDirs;
         try
         {
-            subDirs = Directory.GetDirectories(currentDir);
+            subDirs = currentDir.EnumerateDirectories("*", NonRecursiveOptions);
         }
         catch
         {
@@ -220,23 +292,11 @@ internal static class SafeDeletionEngine
         foreach (var sub in subDirs)
         {
             ct.ThrowIfCancellationRequested();
-            try
-            {
-                var attr = File.GetAttributes(sub);
-                if ((attr & SkipMask) != 0)
-                {
-                    continue;
-                }
-            }
-            catch
-            {
-                continue;
-            }
-
             TraverseAndCleanDirectory(
                 sub,
                 dryRun,
                 deleteDirectoryItself: true,
+                canFastPathColdCacheInDryRun,
                 ref bytesReclaimed,
                 ref filesProcessed,
                 skippedLocked,
@@ -248,9 +308,9 @@ internal static class SafeDeletionEngine
         {
             try
             {
-                if (!Directory.EnumerateFileSystemEntries(currentDir).Any())
+                if (!Directory.EnumerateFileSystemEntries(currentDir.FullName).Any())
                 {
-                    Directory.Delete(currentDir, recursive: false);
+                    Directory.Delete(currentDir.FullName, recursive: false);
                 }
             }
             catch
@@ -260,45 +320,114 @@ internal static class SafeDeletionEngine
         }
     }
 
-    private static bool IsFileCurrentlyLockedForDelete(string filePath)
+    /// <summary>
+    /// Probes whether a file can be opened with DELETE (0x00010000) disposition access only.
+    /// Does NOT request FILE_READ_DATA or FILE_WRITE_DATA, avoiding Windows Defender stream inspection.
+    /// </summary>
+    private static bool IsFileLockedForDeleteFast(string filePath, FileAttributes attributes)
     {
-        try
+        if (!OperatingSystem.IsWindows())
         {
-            using var fs = new FileStream(
-                filePath,
-                FileMode.Open,
-                FileAccess.ReadWrite,
-                FileShare.ReadWrite | FileShare.Delete);
             return false;
         }
-        catch (IOException ex) when (IsSharingOrLockViolation(ex))
+
+        // Read-only files can still be locked by an exclusive FileShare.None handle; if not ReadOnly, probe DELETE directly.
+        if ((attributes & FileAttributes.ReadOnly) == 0)
+        {
+            using var handle = CreateFileW(
+                filePath,
+                AccessDeleteOnly,
+                ShareReadWriteDelete,
+                IntPtr.Zero,
+                OpenExisting,
+                0,
+                IntPtr.Zero);
+
+            if (!handle.IsInvalid)
+            {
+                return false;
+            }
+
+            var err = Marshal.GetLastWin32Error();
+            if (err is ErrorFileNotFound or ErrorPathNotFound)
+            {
+                return false;
+            }
+
+            return err is ErrorAccessDenied or ErrorSharingViolation or ErrorLockViolation;
+        }
+
+        // For ReadOnly files, check if another process holds a sharing lock via READ_ATTRIBUTES (0x80) with ShareReadWriteDelete.
+        using var roHandle = CreateFileW(
+            filePath,
+            0x00000080, // FILE_READ_ATTRIBUTES only
+            ShareReadWriteDelete,
+            IntPtr.Zero,
+            OpenExisting,
+            0,
+            IntPtr.Zero);
+
+        if (!roHandle.IsInvalid)
+        {
+            return false;
+        }
+
+        var roErr = Marshal.GetLastWin32Error();
+        return roErr is ErrorSharingViolation or ErrorLockViolation;
+    }
+
+    private static bool TryDeleteFileFast(string filePath, out bool isLockedOrDenied, out int win32Error)
+    {
+        isLockedOrDenied = false;
+        win32Error = 0;
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.Delete(filePath);
+            return true;
+        }
+
+        if (DeleteFileW(filePath))
         {
             return true;
         }
-        catch (UnauthorizedAccessException)
+
+        win32Error = Marshal.GetLastWin32Error();
+        if (win32Error is ErrorFileNotFound or ErrorPathNotFound)
         {
-            // Read-only files are cleared before delete; check whether it's simply ReadOnly attribute.
-            try
-            {
-                var attr = File.GetAttributes(filePath);
-                return (attr & FileAttributes.ReadOnly) == 0;
-            }
-            catch
-            {
-                return true;
-            }
-        }
-        catch
-        {
+            // Ephemeral temp file already removed by the owning application
+            win32Error = 0;
             return false;
         }
+
+        if (win32Error is ErrorAccessDenied or ErrorSharingViolation or ErrorLockViolation)
+        {
+            isLockedOrDenied = true;
+            return false;
+        }
+
+        return false;
     }
 
     private static bool IsSharingOrLockViolation(IOException ex)
     {
         var code = ex.HResult & 0xFFFF;
-        return code is 32 or 33; // ERROR_SHARING_VIOLATION (32) or ERROR_LOCK_VIOLATION (33)
+        return code is ErrorSharingViolation or ErrorLockViolation;
     }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern SafeFileHandle CreateFileW(
+        string lpFileName,
+        uint dwDesiredAccess,
+        uint dwShareMode,
+        IntPtr lpSecurityAttributes,
+        uint dwCreationDisposition,
+        uint dwFlagsAndAttributes,
+        IntPtr hTemplateFile);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteFileW(string lpFileName);
 
     private sealed class MinimalGuardSnapshot : ISystemSnapshot
     {
@@ -341,20 +470,20 @@ public sealed class FullDirectoryDeleteStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.DeleteContents;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(SafeDeletionEngine.ProcessDirectoriesContents(
+        SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: true,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken));
+            cancellationToken);
 
     public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(SafeDeletionEngine.ProcessDirectoriesContents(
+        SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: false,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken));
+            cancellationToken);
 }
 
 public sealed class DeleteUnlockedItemsStrategy : ICleanupStrategy
@@ -362,20 +491,20 @@ public sealed class DeleteUnlockedItemsStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.DeleteUnlockedItems;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(SafeDeletionEngine.ProcessDirectoriesContents(
+        SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: true,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken));
+            cancellationToken);
 
     public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(SafeDeletionEngine.ProcessDirectoriesContents(
+        SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             new[] { finding.TargetPath },
             dryRun: false,
             deleteTargetRootDirWhenEmpty: false,
-            cancellationToken));
+            cancellationToken);
 }
 
 public sealed class SelectiveSubfolderPurgeStrategy : ICleanupStrategy
@@ -383,17 +512,17 @@ public sealed class SelectiveSubfolderPurgeStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.SelectiveSubfolderPurge;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(RunSelective(finding, dryRun: true, cancellationToken));
+        RunSelectiveAsync(finding, dryRun: true, cancellationToken);
 
     public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(RunSelective(finding, dryRun: false, cancellationToken));
+        RunSelectiveAsync(finding, dryRun: false, cancellationToken);
 
-    private static CleanupItemResult RunSelective(StorageFinding finding, bool dryRun, CancellationToken ct)
+    private static Task<CleanupItemResult> RunSelectiveAsync(StorageFinding finding, bool dryRun, CancellationToken ct)
     {
         if (finding.SubPathsToClean.Count == 0 ||
             finding.SubPathsToClean.Any(p => !BrowserProfilePreservationGuard.IsAllowedBrowserCachePath(p)))
         {
-            return new CleanupItemResult(
+            return Task.FromResult(new CleanupItemResult(
                 finding.Id,
                 finding.RuleId,
                 finding.TargetPath,
@@ -403,10 +532,10 @@ public sealed class SelectiveSubfolderPurgeStrategy : ICleanupStrategy
                 0,
                 Array.Empty<string>(),
                 Array.Empty<string>(),
-                "Chặn an toàn: Đường dẫn con trình duyệt không nằm trong danh mục bộ nhớ đệm cho phép.");
+                "Chặn an toàn: Đường dẫn con trình duyệt không nằm trong danh mục bộ nhớ đệm cho phép."));
         }
 
-        return SafeDeletionEngine.ProcessDirectoriesContents(
+        return SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             finding.SubPathsToClean,
             dryRun,
@@ -420,20 +549,20 @@ public sealed class SemVerDuplicatePruneStrategy : ICleanupStrategy
     public CleanupActionType SupportedAction => CleanupActionType.SemVerDuplicatePrune;
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(SafeDeletionEngine.ProcessDirectoriesContents(
+        SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             finding.SubPathsToClean,
             dryRun: true,
             deleteTargetRootDirWhenEmpty: true,
-            cancellationToken));
+            cancellationToken);
 
     public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(SafeDeletionEngine.ProcessDirectoriesContents(
+        SafeDeletionEngine.ProcessDirectoriesContentsAsync(
             finding,
             finding.SubPathsToClean,
             dryRun: false,
             deleteTargetRootDirWhenEmpty: true,
-            cancellationToken));
+            cancellationToken);
 }
 
 public sealed class SecondaryDriveRelocateStrategy : ICleanupStrategy
@@ -448,10 +577,10 @@ public sealed class SecondaryDriveRelocateStrategy : ICleanupStrategy
     }
 
     public Task<CleanupItemResult> SimulateAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(BuildAdvisoryResult(finding));
+        Task.Run(() => BuildAdvisoryResult(finding), cancellationToken);
 
     public Task<CleanupItemResult> ExecuteAsync(StorageFinding finding, CancellationToken cancellationToken = default) =>
-        Task.FromResult(BuildAdvisoryResult(finding));
+        Task.Run(() => BuildAdvisoryResult(finding), cancellationToken);
 
     private CleanupItemResult BuildAdvisoryResult(StorageFinding finding)
     {

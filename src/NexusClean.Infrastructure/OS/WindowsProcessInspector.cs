@@ -320,13 +320,24 @@ public sealed class WindowsSystemSnapshotProvider : ISystemSnapshotProvider
         IReadOnlyList<VolumeSnapshot> volumes,
         IProcessLockInspector lockInspector) : ISystemSnapshot
     {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<string>> _lockCache =
+            new(StringComparer.OrdinalIgnoreCase);
+
         public bool IsCurrentProcessElevated => isElevated;
         public IReadOnlySet<string> RunningProcessNames => runningProcesses;
         public IReadOnlyList<string> AdditionalProtectedRoots => roots;
         public IReadOnlyList<string> AdditionalProtectedFileNames => files;
         public IReadOnlyList<VolumeSnapshot> FixedVolumes => volumes;
 
-        public IReadOnlyList<string> GetLockingProcesses(IReadOnlyList<string> candidatePaths) =>
-            lockInspector.GetLockingProcesses(candidatePaths);
+        public IReadOnlyList<string> GetLockingProcesses(IReadOnlyList<string> candidatePaths)
+        {
+            if (candidatePaths is null || candidatePaths.Count == 0)
+            {
+                return Array.Empty<string>();
+            }
+
+            var key = string.Join("|", candidatePaths);
+            return _lockCache.GetOrAdd(key, _ => lockInspector.GetLockingProcesses(candidatePaths));
+        }
     }
 }
